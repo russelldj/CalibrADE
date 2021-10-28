@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "CalibrADE"
+version = "0.1.0"
+description = "A toolbox for end-to-end camera calibration with minimal pain."
+authors = ["David Russell <davidrus@andrew.cmu.edu>"]
+license = "GPLv3"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+opencv-python = "^4.5.4"
+numpy = "^1.21.3"
+
+[tool.poetry.dev-dependencies]
+black = "^21.9b0"
+isort = "^5.9.3"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
