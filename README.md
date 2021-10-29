@@ -11,6 +11,13 @@ I'm trying to manage dependencies with [Poetry](https://python-poetry.org/). I'v
 
 It's also pip installable [![PyPI version](https://badge.fury.io/py/calibrade.svg)](https://badge.fury.io/py/calibrade) with `pip install calibrade`.
 
+# DVC
+```dvc add <files>
+run the git command that shows up
+git push
+dvc push
+```
+
 # Quickstart
 You can run a simple OpenCV control point detection script with
 ```
