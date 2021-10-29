@@ -4,9 +4,11 @@ Developed by Aarrushi Shandilya, David Russell, and Eric Schneider for 16-811: M
 
 
 # Setup
-The main dependencies of this project are `opencv` and `matplotlib`.
 
-There's two magic tools in play here, [poetry](https://python-poetry.org/) and [dvc](https://dvc.org/). Poetry is used to manage dependency versions but you can do it yourself. DVC is used to manage data, but for now you can just download `left*jpg` images from [here](https://github.com/opencv/opencv/blob/master/samples/data) and place them in `data/opencv_examples` because I havn't set up a DVC remote yet.
+I have tried to set up [dvc](https://dvc.org/) to manage the data. The first step is to install `dvc` with `pip install dvc` or an analagous command. Then you *should* be able to run `dvc pull` within the repository and have it grab the data for you. There's a chance, however, that there's permission issues for other people trying to do that. If DVC doesn't work, you can just download `left*jpg` images from [here](https://github.com/opencv/opencv/blob/master/samples/data) and place them in `data/opencv_examples`.
+
+I'm trying to manage dependencies with [Poetry](https://python-poetry.org/). I've found it a little tricky to use, so if you don't want to learn it, you can install the dependencies yourself. At this point they should just be `opencv` and `matplotlib`.
+
 
 # Quickstart
 You can run a simple OpenCV control point detection script with
