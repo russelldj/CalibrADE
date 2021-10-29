@@ -9,15 +9,21 @@ I have tried to set up [dvc](https://dvc.org/) to manage the data. The first ste
 
 I'm trying to manage dependencies with [Poetry](https://python-poetry.org/). I've found it a little tricky to use, so if you don't want to learn it, you can install the dependencies yourself. At this point they should just be `opencv` and `matplotlib`.
 
+```
+[For linux]
+curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
+
+```
+
 It's also pip installable [![PyPI version](https://badge.fury.io/py/calibrade.svg)](https://badge.fury.io/py/calibrade) with `pip install calibrade`.
 
 # DVC
-```dvc add <files>
+```
+dvc add <files>
 run the git command that shows up
 git push
 dvc push
 ```
-
 
 # Quickstart
 You can run a simple OpenCV control point detection script with

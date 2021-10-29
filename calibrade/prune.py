@@ -13,6 +13,8 @@ from skimage.morphology import binary_closing, binary_opening
 #   | I * Lx | + | I * Ly |
 # Where I is the image, * is convolution, Lx is [-1, 2, -1], and Ly is Lx.T
 kernel = numpy.array([-1, 2, -1])
+
+
 def lap2_focus_measure(image, mask):
     """
     Arguments:
@@ -104,14 +106,13 @@ def get_threshold(image_keys, focus, ratio=0.2, step=0.05):
 
 
 # TODO: Tune for time - downsample images? Even if only for mask generation?
-def main(image_paths, good_dir, bad_dir, plot, recompute, save_images,
-         threshold=None):
+def main(image_paths, good_dir, bad_dir, plot, recompute, save_images, threshold=None):
 
     # Convert to strings (keys for dictionary later)
     image_keys = [str(path.absolute()) for path in image_paths]
 
     # Save values for speed reasons on multiple runs
-    pickle_path = Path('blur_values.pickle')
+    pickle_path = Path("blur_values.pickle")
     if recompute or not pickle_path.is_file():
         metrics = {}
         for i, path in enumerate(image_keys):
@@ -121,16 +122,15 @@ def main(image_paths, good_dir, bad_dir, plot, recompute, save_images,
             # TODO: Replace with a named tuple?
             metrics[path] = (
                 lap2_focus_measure(
-                    cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(float),
-                    mask,
+                    cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(float), mask
                 ),
                 numpy.sum(mask),
             )
-        with open(pickle_path, 'wb') as outfile:
+        with open(pickle_path, "wb") as outfile:
             pickle.dump(metrics, outfile, protocol=pickle.HIGHEST_PROTOCOL)
 
     # Make a hard line where we always work from these metrics
-    with open(pickle_path, 'rb') as infile:
+    with open(pickle_path, "rb") as infile:
         metrics = pickle.load(infile)
     focus = numpy.array([metrics[path][0] for path in image_keys])
     # TODO: Once the pickle files with nans are all gone remove this call
@@ -166,73 +166,72 @@ def main(image_paths, good_dir, bad_dir, plot, recompute, save_images,
 
     if plot:
         cdf(focus, normed=False)
-        pyplot.plot([threshold]*2, [0, len(focus)], "k--")
+        pyplot.plot([threshold] * 2, [0, len(focus)], "k--")
         pyplot.show()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Sorts given images "
-    )
+    parser = argparse.ArgumentParser(description="Sorts given images ")
     parser.add_argument(
         "image_dir",
         type=Path,
-        help="Path to directory of images we want to search over"
+        help="Path to directory of images we want to search over",
     )
     parser.add_argument(
         "good_dir",
         type=Path,
         help="Path to directory where we want to sort images deemed good. Can"
-             " already exist, will overwrite images there if names match."
+        " already exist, will overwrite images there if names match.",
     )
     parser.add_argument(
         "bad_dir",
         type=Path,
         help="Path to directory where we want to sort images deemed bad. Can"
-             " already exist, will overwrite images there if names match."
+        " already exist, will overwrite images there if names match.",
     )
     parser.add_argument(
-        "-f", "--filetype",
+        "-f",
+        "--filetype",
         help="Filetype for images, will be used in glob. For example: jpg/jpeg/png",
         default="jpg",
     )
     parser.add_argument(
-        "-r", "--recompute",
+        "-r",
+        "--recompute",
         help="Whether to recompute scores even if pickle file exists",
         action="store_true",
     )
     parser.add_argument(
-        "-p", "--plot",
-        help="Whether to plot results",
-        action="store_true",
+        "-p", "--plot", help="Whether to plot results", action="store_true"
     )
     parser.add_argument(
-        "-s", "--save",
-        help="Save images to the folders",
-        action="store_true",
+        "-s", "--save", help="Save images to the folders", action="store_true"
     )
     parser.add_argument(
-        "-t", "--threshold",
+        "-t",
+        "--threshold",
         help="Set the lap2 threshold for blurry images. If you don't know what"
-             " a good value is, run this without setting the value and you'll"
-             " get an interactive process.",
+        " a good value is, run this without setting the value and you'll"
+        " get an interactive process.",
         type=float,
         default=None,
     )
     args = parser.parse_args()
-    assert args.image_dir.is_dir(), \
-        f"{args.image_dir} needs to be a directory"
+    assert args.image_dir.is_dir(), f"{args.image_dir} needs to be a directory"
 
-    if not args.good_dir.is_dir(): args.good_dir.mkdir()
-    if not args.bad_dir.is_dir(): args.bad_dir.mkdir()
+    if not args.good_dir.is_dir():
+        args.good_dir.mkdir()
+    if not args.bad_dir.is_dir():
+        args.bad_dir.mkdir()
 
     assert args.image_dir.absolute() != args.good_dir.absolute()
     assert args.image_dir.absolute() != args.bad_dir.absolute()
     assert args.good_dir.absolute() != args.bad_dir.absolute()
 
     image_paths = sorted(list(args.image_dir.glob(f"*{args.filetype}")))
-    assert len(image_paths) > 0, \
-        f"{str(args.image_dir.absolute())}/*{args.filetype} produced no files"
+    assert (
+        len(image_paths) > 0
+    ), f"{str(args.image_dir.absolute())}/*{args.filetype} produced no files"
 
     main(
         image_paths=image_paths,
