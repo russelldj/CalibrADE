@@ -1,9 +1,9 @@
 [tool.poetry]
 name = "CalibrADE"
-version = "0.1.0"
+version = "0.1.1"
 description = "A toolbox for end-to-end camera calibration with minimal pain."
-authors = ["David Russell <davidrus@andrew.cmu.edu>"]
-license = "GPLv3"
+authors = ["Aarrushi Shandilya", "David Russell <davidrus@andrew.cmu.edu>", "Eric Schneider"]
+license = "MIT"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.11"
