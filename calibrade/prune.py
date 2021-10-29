@@ -1,9 +1,8 @@
 import argparse
+from pathlib import Path
 import cv2
 from matplotlib import pyplot
 import numpy
-from pathlib import Path
-import pickle
 from skimage.morphology import binary_closing, binary_opening
 
 
@@ -12,7 +11,7 @@ from skimage.morphology import binary_closing, binary_opening
 # The modified Laplacian if an image is computed as
 #   | I * Lx | + | I * Ly |
 # Where I is the image, * is convolution, Lx is [-1, 2, -1], and Ly is Lx.T
-kernel = numpy.array([-1, 2, -1])
+KERNEL = numpy.array([-1, 2, -1])
 
 
 def lap2_focus_measure(image, mask):
@@ -21,8 +20,8 @@ def lap2_focus_measure(image, mask):
         image: (N, M) greyscale, floating point from 0-255
         mask: (N, M) boolean array, True where we want to extract values
     """
-    lx = numpy.convolve(image.flatten(), kernel, mode="same").reshape(image.shape)
-    ly = numpy.convolve(image.T.flatten(), kernel, mode="same").reshape(image.T.shape)
+    lx = numpy.convolve(image.flatten(), KERNEL, mode="same").reshape(image.shape)
+    ly = numpy.convolve(image.T.flatten(), KERNEL, mode="same").reshape(image.T.shape)
     raw = numpy.sum(numpy.abs(lx[mask]) + numpy.abs(ly[mask.T]))
 
     # vvvv Diverges from the paper vvvv
@@ -53,84 +52,37 @@ def cdf(x, normed=True, *args, **kwargs):
 # TODO: Make this real
 def target_mask(image):
     """
-    image needs to be a color image of shape (N, M, 3)
+    Arguments:
+        image: grayscale image of shape (N, M)
 
-    Will return a boolean mask of shape (N, M), which is True for pixels that
-    we think are panicle.
+    Returns: Boolean mask of shape (N, M), which is True for pixels that
+        we think are on the calibration target.
     """
     return numpy.ones(image.shape[:2], dtype=bool)
 
 
-def get_threshold(image_paths, focus, ratio=0.2, step=0.05):
-    """
-    TODO.
-    """
-    frange = focus.max() - focus.min()
-    thresh = frange * ratio + focus.min()
-
-    highest_blur = -1
-    blur_idx = -1
-    lowest_sharp = 1e10
-    sharp_idx = -1
-    seen_blur = False
-    seen_sharp = False
-
-    # TODO: Is there a more ergonomic way to sort images? This section could
-    # be polished. Can we climb up and down the CDF instead of the value?
-    # E.g. indexing off of numpy.argsort.
-    while not (seen_blur and seen_sharp):
-        idx = numpy.argmin(numpy.abs(focus - thresh))
-        image = cv2.imread(image_paths[idx])
-        cv2.imshow("Does this count as blurry?", image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        value = None
-        while value not in ["y", "n"]:
-            value = input(f"Threshold {thresh}: was it blurry? [y/n]:\n")
-        if value == "y":
-            if focus[idx] > highest_blur:
-                highest_blur = focus[idx]
-                blur_idx = idx
-            seen_blur = True
-            thresh += frange * step
-        else:
-            if focus[idx] < lowest_sharp:
-                lowest_sharp = focus[idx]
-                sharp_idx = idx
-            seen_sharp = True
-            thresh -= frange * step
-
-    # TODO: Expand this to check a few more images around the critical point
-    # to get more resolution
-    return lowest_sharp
-
-
 # TODO: Tune for time - downsample images? Even if only for mask generation?
-def prune(image_paths, ratio=0.5, plot=False, recompute=False, save_images=False):
+def prune(image_paths, ratio=0.5, plot=False, save_images=False):
     """
-    TODO
+    Arguments:
+        image_paths: list of strings of paths to the images
+        ratio: (float) fraction of the images that we are asserting to be of
+            good blur quality
+        plot: (bool) show a plot of the blur values across the images (debug)
+        save_images: (bool) NOT IMPLEMENTED CURRENTLY - save visualization
+            images to double-check this process. SEE COMMENTED OUT CODE FOR
+            A PARTIAL IMPLEMENTATION.
     """
 
-    # Save values for speed reasons on multiple runs
-    pickle_path = Path("blur_values.pickle")
-    if recompute or not pickle_path.is_file():
-        metrics = {}
-        for i, path in enumerate(image_paths):
-            print(i)  # TODO: Remove or make more sophisticated
-            image = cv2.imread(str(path))
-            mask = target_mask(image)
-            # TODO: Replace with a named tuple?
-            metrics[path] = lap2_focus_measure(
-                cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(float), mask
-            )
-        with open(pickle_path, "wb") as outfile:
-            pickle.dump(metrics, outfile, protocol=pickle.HIGHEST_PROTOCOL)
+    # Calculate the "focus" metric for each image
+    focus = []
+    for path in image_paths:
+        image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+        mask = target_mask(image)
+        focus.append(lap2_focus_measure(image.astype(float), mask))
+    focus = numpy.array(focus)
 
-    # Make a hard line where we always work from these metrics
-    with open(pickle_path, "rb") as infile:
-        metrics = pickle.load(infile)
-    focus = numpy.array([metrics[path][0] for path in image_paths])
-
+    # TODO: Make this sort of result visualization relevant again
     # # Temporary code to evaluate images. Later, will turn into good/bad sorting
     # # When only sorting images, perhaps use a copy tool?
     # if save_images:
@@ -154,17 +106,18 @@ def prune(image_paths, ratio=0.5, plot=False, recompute=False, save_images=False
     #         cv2.imwrite(str(newpath), image)
     #         print(f"Saved {newpath}")
 
+    # Choose the images in the top ratio as the images we are marking as
+    # good quality
     sorted_indices = numpy.argsort(focus)
     cutoff_idx = int(ratio * len(focus))
-    # How much blur is too much?
-    threshold = focus[sorted_indices[cutoff_idx]]
 
     if plot:
         cdf(focus, normed=False)
+        threshold = focus[sorted_indices[cutoff_idx]]
         pyplot.plot([threshold] * 2, [0, len(focus)], "k--")
         pyplot.show()
 
-    # Make a boolean array saying which half of the images are highest quality
+    # Make a boolean array saying which ratio of the images are highest quality
     prune_ids = numpy.zeros(len(focus), dtype=bool)
     prune_ids[sorted_indices[cutoff_idx:]] = True
     return prune_ids
@@ -184,12 +137,6 @@ if __name__ == "__main__":
         default="jpg",
     )
     parser.add_argument(
-        "-r",
-        "--recompute",
-        help="Whether to recompute scores even if pickle file exists",
-        action="store_true",
-    )
-    parser.add_argument(
         "-p", "--plot", help="Whether to plot results", action="store_true"
     )
     parser.add_argument(
@@ -206,9 +153,4 @@ if __name__ == "__main__":
         len(image_paths) > 0
     ), f"{str(args.image_dir.absolute())}/*{args.filetype} produced no files"
 
-    print(prune(
-        image_paths=image_paths,
-        plot=args.plot,
-        recompute=args.recompute,
-        save_images=args.save,
-    ))
+    print(prune(image_paths=image_paths, plot=args.plot, save_images=args.save))
