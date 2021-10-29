@@ -12,7 +12,9 @@ I'm trying to manage dependencies with [Poetry](https://python-poetry.org/). I'v
 ```
 [For linux]
 curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
-
+cd /path/to/CalibrADE/
+poetry install  # Run this once at the beginning
+poetry shell    # Run this every time you want to run stuff
 ```
 
 It's also pip installable [![PyPI version](https://badge.fury.io/py/calibrade.svg)](https://badge.fury.io/py/calibrade) with `pip install calibrade`.
