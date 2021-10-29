@@ -1,0 +1,5 @@
+outs:
+- md5: 059e074e81898e7dc9964bd915f340aa.dir
+  size: 759268
+  nfiles: 28
+  path: opencv_examples
