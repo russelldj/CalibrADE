@@ -33,6 +33,11 @@ You can run a simple OpenCV control point detection script with
 python calibrade/opencv_intro.py
 ```
 
+Visualize a set of camera extrinsics. Note, this does not correspond to the other images in the project
+```
+python calibrade/opencv_visualize_extrinsics.py --calibration data/example_calibration_results/left_intrinsics.yml --patternCentric
+```
+
 [Work in progress]
 The pruning step can be run with these arguments. `--recompute` and `--threshold` may also be helpful as you play with it.
 ```
