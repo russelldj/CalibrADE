@@ -5,7 +5,6 @@ import numpy
 from pathlib import Path
 import pickle
 from skimage.morphology import binary_closing, binary_opening
-from sklearn import svm
 
 
 # The LAP2 filter measurement from here:
