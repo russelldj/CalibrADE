@@ -11,5 +11,11 @@ There's two magic things at play here, [poetry](https://python-poetry.org/) and 
 # Quickstart
 You can run the only functional code with `python calibrade/opencv_intro.py`.
 
+[Work in progress]
+The pruning step can be run with these arguments. `--recompute` and `--threshold` may also be helpful as you play with it.
+```
+python calibrade/prune.py data/ good/ bad/ --filetype jpeg --plot --save
+```
+
 # License
 Distributed under the MIT license
