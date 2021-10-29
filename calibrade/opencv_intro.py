@@ -3,8 +3,12 @@ import os
 
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 
 from constants import DATA_FOLDER
+
+# Taken from
+# https://opencv24-python-tutorials.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
 
 # termination criteria
 criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -17,7 +21,7 @@ objp[:, :2] = np.mgrid[0:7, 0:6].T.reshape(-1, 2)
 objpoints = []  # 3d point in real world space
 imgpoints = []  # 2d points in image plane.
 
-images = glob.glob(os.path.join(DATA_FOLDER, "*.jpeg"))
+images = glob.glob(os.path.join(DATA_FOLDER, "opencv_examples", "left*.jpg"))
 
 for fname in images:
     img = cv2.imread(fname)
@@ -35,7 +39,11 @@ for fname in images:
 
         # Draw and display the corners
         img = cv2.drawChessboardCorners(img, (7, 6), corners2, ret)
-        cv2.imshow("img", img)
-        cv2.waitKey(500)
+
+        img = np.flip(img, 2)  # convert from BGR to RGB
+        plt.imshow(img)
+        plt.pause(2)
+    else:
+        print("Corners not found")
 
 cv2.destroyAllWindows()
