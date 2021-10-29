@@ -17,6 +17,7 @@ scikit-image = "^0.18.3"
 black = "^21.9b0"
 isort = "^5.9.3"
 dvc = "^2.8.2"
+ipdb = "^0.13.9"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
