@@ -1,0 +1,5 @@
+outs:
+- md5: e97f303db8f41167d6aaa9e94df5f2d7.dir
+  size: 177193222
+  nfiles: 5
+  path: small_board
