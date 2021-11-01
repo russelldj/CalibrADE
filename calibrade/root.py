@@ -57,8 +57,8 @@ def optimize(img_paths, test_ids, global_train_ids, max_iter, train_subset_perc)
         # evaluation
         test_err.append(evaluate(img_paths, test_ids, cam_params[-1]))
 
-    iter = np.argmin(test_err)
-    return cam_params[iter], train_subset_ids_list[iter]
+    min_idx = np.argmin(test_err)
+    return cam_params[min_idx], train_subset_ids_list[min_idx]
 
 
 def root(args):
@@ -78,22 +78,31 @@ def args_parse():
         "--datadir", default="./data/", help="directory containing all images"
     )
     parser.add_argument(
-        "--test_set_split_perc",
+        "-t",
+        "--test-set-split-perc",
         default=50,
+        type=float,
         help="what percentage of pruned set should be selected as initial test set",
     )
     parser.add_argument(
-        "--dump_test_set",
+        "-d",
+        "--dump-test-set",
         action="store_true",
         help="save test set images in a folder for visualization",
     )
     parser.add_argument(
-        "--train_subset_perc",
+        "-r",
+        "--train-subset-perc",
         default=70,
+        type=float,
         help="percentage of samples from global train set to be sampled for an optimization iteration",
     )
     parser.add_argument(
-        "--max_iter", default=100, help="max number of optimization iterations"
+        "-m",
+        "--max-iter",
+        default=100,
+        type=int,
+        help="max number of optimization iterations"
     )
     args = parser.parse_args()
 

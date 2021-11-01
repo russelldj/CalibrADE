@@ -61,7 +61,6 @@ def target_mask(image):
     return numpy.ones(image.shape[:2], dtype=bool)
 
 
-# TODO: Tune for time - downsample images? Even if only for mask generation?
 def prune(image_paths, ratio=0.5, plot=False, save_images=False):
     """
     Arguments:
