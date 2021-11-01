@@ -1,8 +1,12 @@
-from ast import parse
-import numpy as np
 import argparse
+from ast import parse
 from pathlib import Path
-from prune import *
+
+import numpy as np
+
+from calibrade.calibrate_intrinsics import calibrate, evaluate_reprojection
+from calibrade.prune import prune
+
 
 # read images names from data folder
 def read_data(datadir):
@@ -51,7 +55,7 @@ def optimize(img_paths, test_ids, global_train_ids, max_iter, train_subset_perc)
         # calibration
         cam_params.append(calibrate(img_paths, train_ids))
         # evaluation
-        test_err.append(evaluate(img_paths, test_ids, cam_params[-1]))
+        test_err.append(evaluate_reprojection(img_paths, test_ids, cam_params[-1]))
 
     min_idx = np.argmin(test_err)
     return cam_params[min_idx], train_subset_ids_list[min_idx]
@@ -100,7 +104,7 @@ def args_parse():
         "--max-iter",
         default=100,
         type=int,
-        help="max number of optimization iterations"
+        help="max number of optimization iterations",
     )
     args = parser.parse_args()
     assert args.datadir.is_dir()
