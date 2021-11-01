@@ -23,7 +23,7 @@ It's also pip installable [![PyPI version](https://badge.fury.io/py/calibrade.sv
 ```
 dvc add <files>
 run the git command that shows up
-git push
+git push # This may ask you to set up permission with Google drive. You need the GDrive data folder shared with you.
 dvc push
 ```
 
