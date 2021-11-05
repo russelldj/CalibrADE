@@ -24,15 +24,11 @@ def prune_wrapper(img_paths):
 
 
 # deciding the subset test split
-
-
 def select_subset(split_perc, ids):
-
     subset_ids = np.zeros(len(ids), dtype=bool)
-    subset_size = np.floor(split_perc * np.sum(ids)) / 100
+    subset_size = int(split_perc / 100 * np.sum(ids))
     options = np.where(ids)[0]
     subset_ids[np.random.choice(options, size=subset_size, replace=False)] = True
-
     return subset_ids
 
 
@@ -75,7 +71,9 @@ def args_parse():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--datadir", default="./data/", help="directory containing all images"
+        "datadir",
+        type=Path,
+        help="directory containing all images"
     )
     parser.add_argument(
         "-t",
@@ -105,6 +103,7 @@ def args_parse():
         help="max number of optimization iterations"
     )
     args = parser.parse_args()
+    assert args.datadir.is_dir()
 
     return args
 
