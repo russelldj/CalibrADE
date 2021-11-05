@@ -1,6 +1,7 @@
 import glob
 import logging
 import os
+import pdb
 
 import cv2
 import matplotlib.pyplot as plt
@@ -17,7 +18,7 @@ NUM_GRID_CORNERS = (7, 6)
 
 # Taken from
 # https://opencv24-python-tutorials.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
-def calibrate_images(image_names, num_grid_corners=NUM_GRID_CORNERS, vis=True):
+def calibrate_images(image_names, num_grid_corners=NUM_GRID_CORNERS, vis=False):
 
     # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
     objp = np.zeros((num_grid_corners[0] * num_grid_corners[1], 3), np.float32)
@@ -30,7 +31,7 @@ def calibrate_images(image_names, num_grid_corners=NUM_GRID_CORNERS, vis=True):
     imgpoints = []  # 2d points in image plane.
 
     for fname in image_names:
-        img = cv2.imread(fname)
+        img = cv2.imread(str(fname))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # Find the chess board corners
@@ -82,7 +83,7 @@ def calibrate(image_names, train_ids):
 
 def visualize_undistortion(image_path, mtx, dist):
     # Undistort
-    img = cv2.imread(image_path)
+    img = cv2.imread(str(image_path))
     h, w = img.shape[:2]
     newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
 
@@ -118,7 +119,7 @@ def evaluate_reprojection(image_paths, test_ids, params):
     all_imgpoints = []
 
     for fname in valid_images:
-        img = cv2.imread(fname)
+        img = cv2.imread(str(fname))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         ret, corners = cv2.findChessboardCorners(gray, num_grid_corners, None)
         if ret:

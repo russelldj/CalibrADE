@@ -1,11 +1,14 @@
 import argparse
 from ast import parse
 from pathlib import Path
+import pdb
+import matplotlib.pyplot as plt
+import tqdm
 
 import numpy as np
 
-from calibrade.calibrate_intrinsics import calibrate, evaluate_reprojection
-from calibrade.prune import prune
+from calibrate_intrinsics import calibrate, evaluate_reprojection
+from prune import prune
 
 
 # read images names from data folder
@@ -15,7 +18,7 @@ def read_data(datadir):
     extensions = {"*.jpg", "*.JPG", "*png", "*.PNG"}
     for ext in extensions:
         img_paths.extend(list(datadir.glob(ext)))
-
+    img_paths = np.asarray(img_paths)
     return img_paths
 
 
@@ -42,7 +45,9 @@ def visualize_set(img_paths, ids, tag):  # tag decides if its train or test fold
     print("tbd")
 
 
-def optimize(img_paths, test_ids, global_train_ids, max_iter, train_subset_perc):
+def optimize(
+    img_paths, test_ids, global_train_ids, max_iter, train_subset_perc, vis_hist=False
+):
 
     test_err = []
     cam_params = []
@@ -56,6 +61,10 @@ def optimize(img_paths, test_ids, global_train_ids, max_iter, train_subset_perc)
         cam_params.append(calibrate(img_paths, train_ids))
         # evaluation
         test_err.append(evaluate_reprojection(img_paths, test_ids, cam_params[-1]))
+
+    if vis_hist:
+        plt.hist(test_err)
+        plt.show()
 
     min_idx = np.argmin(test_err)
     return cam_params[min_idx], train_subset_ids_list[min_idx]
@@ -74,11 +83,7 @@ def root(args):
 def args_parse():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "datadir",
-        type=Path,
-        help="directory containing all images"
-    )
+    parser.add_argument("datadir", type=Path, help="directory containing all images")
     parser.add_argument(
         "-t",
         "--test-set-split-perc",
