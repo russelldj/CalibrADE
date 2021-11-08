@@ -76,6 +76,7 @@ def root(args):
     print("Reading data... ", end="")
     img_paths = read_data(args.datadir)
     print(f"{len(img_paths)} images selected")
+    assert len(img_paths) > 0, f"Found 0 images in {args.datadir}"
 
     print("Selecting a pruned set")
     prune_ids = prune_wrapper(img_paths)

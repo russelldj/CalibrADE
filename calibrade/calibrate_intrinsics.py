@@ -1,7 +1,9 @@
 import glob
 import logging
+from pathlib import Path
 import os
 import pdb
+import pickle
 
 import cv2
 import matplotlib.pyplot as plt
@@ -15,6 +17,27 @@ PAUSE_INTERVAL = 2
 logger = logging.getLogger(__name__)
 
 NUM_GRID_CORNERS = (7, 9)
+
+
+def get_cached_corners(image_path, gray, num_grid_corners):
+
+    pickle_path = image_path.with_name("chessboard_corners.pickle")
+    try:
+        with open(pickle_path, "rb") as handle:
+            saved = pickle.load(handle)
+    except FileNotFoundError:
+        saved = dict()
+        with open(pickle_path, "wb") as handle:
+            pickle.dump(saved, handle)
+
+    try:
+        return saved[image_path.name]
+    except KeyError:
+        ret, corners = cv2.findChessboardCorners(gray, num_grid_corners, None)
+        saved[image_path.name] = (ret, corners)
+        with open(pickle_path, "wb") as handle:
+            pickle.dump(saved, handle)
+        return (ret, corners)
 
 
 # Taken from
@@ -36,7 +59,7 @@ def calibrate_images(image_names, num_grid_corners=NUM_GRID_CORNERS, vis=False):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # Find the chess board corners
-        ret, corners = cv2.findChessboardCorners(gray, num_grid_corners, None)
+        ret, corners = get_cached_corners(fname, gray, num_grid_corners)
 
         # If found, add object points, image points (after refining them)
         if ret:
@@ -45,12 +68,13 @@ def calibrate_images(image_names, num_grid_corners=NUM_GRID_CORNERS, vis=False):
             corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), CRITERIA)
             imgpoints.append(corners2)
 
-            # Draw and display the corners
-            img = cv2.drawChessboardCorners(img, num_grid_corners, corners2, ret)
-            title = "Detected control points"
-        else:
-            title = "Failed control point detection"
         if vis:
+            if ret:
+                # Draw and display the corners
+                img = cv2.drawChessboardCorners(img, num_grid_corners, corners2, ret)
+                title = "Detected control points"
+            else:
+                title = "Failed control point detection"
             img = np.flip(img, 2)  # convert from BGR to RGB
             plt.imshow(img)
             plt.title(title)
@@ -125,7 +149,7 @@ def evaluate_reprojection(image_paths, test_ids, params):
     for fname in valid_images:
         img = cv2.imread(str(fname))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        ret, corners = cv2.findChessboardCorners(gray, num_grid_corners, None)
+        ret, corners = get_cached_corners(fname, gray, num_grid_corners)
         if ret:
             # TODO determine these constants
             corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), CRITERIA)
