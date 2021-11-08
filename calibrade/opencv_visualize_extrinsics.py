@@ -4,9 +4,10 @@
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
-import cv2 as cv
+import argparse
 
+import cv2 as cv
+import numpy as np
 from numpy import linspace
 
 
@@ -198,9 +199,7 @@ def draw_camera_boards(
     return min_values, max_values
 
 
-def main():
-    import argparse
-
+def parse_args():
     parser = argparse.ArgumentParser(
         description="Plot camera calibration extrinsics.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -232,6 +231,11 @@ def main():
         help="The calibration board is static and the camera is moving.",
     )
     args = parser.parse_args()
+    return args
+
+
+def main():
+    args = parse_args()
 
     fs = cv.FileStorage(cv.samples.findFile(args.calibration), cv.FILE_STORAGE_READ)
     board_width = int(fs.getNode("board_width").real())
