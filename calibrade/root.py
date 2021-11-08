@@ -53,13 +53,15 @@ def optimize(
     cam_params = []
     train_subset_ids_list = []
     for _ in range(0, max_iter):
-
+        print(f"Running iteration {_} / {max_iter}")
         # random subset of train ids
         train_ids = select_subset(train_subset_perc, global_train_ids)
         train_subset_ids_list.append(train_ids)
         # calibration
+        print("Calibrating")
         cam_params.append(calibrate(img_paths, train_ids))
         # evaluation
+        print("Evaluating")
         test_err.append(evaluate_reprojection(img_paths, test_ids, cam_params[-1]))
 
     if vis_hist:
@@ -71,12 +73,25 @@ def optimize(
 
 
 def root(args):
+    print("Reading data... ", end="")
     img_paths = read_data(args.datadir)
+    print(f"{len(img_paths)} images selected")
+
+    print("Selecting a pruned set")
     prune_ids = prune_wrapper(img_paths)
+
+    print("Selecting a subset from pruned as the test set")
     test_ids = select_subset(args.test_set_split_perc, prune_ids)
     global_train_ids = np.invert(test_ids)
+
+    print("Calling calibration on a series of images")
     cam_params, _ = optimize(
-        img_paths, test_ids, global_train_ids, args.max_iter, args.train_subset_perc
+        img_paths=img_paths,
+        test_ids=test_ids,
+        global_train_ids=global_train_ids,
+        max_iter=args.max_iter,
+        train_subset_perc=args.train_subset_perc,
+        vis_hist=args.vis_optimize_hist,
     )
 
 
@@ -96,6 +111,12 @@ def args_parse():
         "--dump-test-set",
         action="store_true",
         help="save test set images in a folder for visualization",
+    )
+    parser.add_argument(
+        "-H",
+        "--vis-optimize-hist",
+        action="store_true",
+        help="Plot the histogram visualization from optimization",
     )
     parser.add_argument(
         "-r",

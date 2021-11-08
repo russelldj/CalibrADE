@@ -14,7 +14,8 @@ CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 PAUSE_INTERVAL = 2
 logger = logging.getLogger(__name__)
 
-NUM_GRID_CORNERS = (7, 6)
+NUM_GRID_CORNERS = (7, 9)
+
 
 # Taken from
 # https://opencv24-python-tutorials.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
@@ -38,7 +39,7 @@ def calibrate_images(image_names, num_grid_corners=NUM_GRID_CORNERS, vis=False):
         ret, corners = cv2.findChessboardCorners(gray, num_grid_corners, None)
 
         # If found, add object points, image points (after refining them)
-        if ret == True:
+        if ret:
             objpoints.append(objp)
             # TODO determine these constants
             corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), CRITERIA)
@@ -104,7 +105,10 @@ def calculate_reprojection_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist):
         imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
         error = cv2.norm(imgpoints[i], imgpoints2, cv2.NORM_L2) / len(imgpoints2)
         total_error += error
-    average_error = total_error / len(objpoints)
+    try:
+        average_error = total_error / len(objpoints)
+    except ZeroDivisionError:
+        average_error = np.inf
     return average_error
 
 
