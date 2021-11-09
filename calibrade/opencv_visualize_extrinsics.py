@@ -173,14 +173,6 @@ def draw_camera_boards(
     patternCentric: bool
         Is the camera considered to be moving
     """
-    print(f"cam_width   {cam_width  }")
-    print(f"cam_height  {cam_height }")
-    # print(f"board_width   {board_width  }")
-    # print(f"board_height  {board_height }")
-    # print(f"square_size   {square_size  }")
-    # print(f"camera_matrix {camera_matrix}")
-    # print(f"extrinsics    {extrinsics   }")
-    breakpoint()
     from matplotlib import cm
 
     min_values = np.zeros((3, 1))
@@ -247,6 +239,10 @@ def visualize(
     """
     ax : ?
         ?
+    rotations: list[np.ndarray]
+        ?
+    translations: list[np.ndarray]
+        ?
     camera_matrix : np.ndarray
         K matrix
     cam_width : float
@@ -271,9 +267,13 @@ def visualize(
     fig = plt.figure()
     ax = fig.gca(projection="3d")
     ax.set_aspect("auto")
-    extrinsics = None
+    translations = np.concatenate(translations, axis=1).transpose()
+    rotations = np.concatenate(rotations, axis=1).transpose()
 
-    draw_camera_boards(
+    extrinsics = np.concatenate((rotations, translations), axis=1)
+    assert extrinsics.shape[1] == 6
+
+    min_values, max_values = draw_camera_boards(
         ax,
         camera_matrix,
         extrinsics=extrinsics,
@@ -283,8 +283,30 @@ def visualize(
         board_width=board_width,
         board_height=board_height,
         square_size=square_size,
-        pattern_centric=pattern_centric,
+        patternCentric=pattern_centric,
     )
+
+    X_min = min_values[0]
+    X_max = max_values[0]
+    Y_min = min_values[1]
+    Y_max = max_values[1]
+    Z_min = min_values[2]
+    Z_max = max_values[2]
+    max_range = np.array([X_max - X_min, Y_max - Y_min, Z_max - Z_min]).max() / 2.0
+
+    mid_x = (X_max + X_min) * 0.5
+    mid_y = (Y_max + Y_min) * 0.5
+    mid_z = (Z_max + Z_min) * 0.5
+    ax.set_xlim(mid_x - max_range, mid_x + max_range)
+    ax.set_ylim(mid_y - max_range, mid_y + max_range)
+    ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+    ax.set_xlabel("x")
+    ax.set_ylabel("z")
+    ax.set_zlabel("-y")
+    ax.set_title("Extrinsic Parameters Visualization")
+
+    plt.show()
 
 
 def parse_args():

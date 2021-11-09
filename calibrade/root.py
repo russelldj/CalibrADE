@@ -7,7 +7,8 @@ import tqdm
 
 import numpy as np
 
-from calibrate_intrinsics import calibrate, evaluate_reprojection
+from calibrate_intrinsics import calibrate, evaluate_reprojection, compute_extrinsics
+from opencv_visualize_extrinsics import visualize
 from prune import prune
 
 
@@ -52,6 +53,7 @@ def optimize(
     max_iter,
     train_subset_perc,
     vis_hist=False,
+    vis_extrinsics=True,
     num_grid_corners=(7, 9),
 ):
 
@@ -74,6 +76,11 @@ def optimize(
         test_err.append(
             evaluate_reprojection(img_paths, test_ids, cam_params[-1], cached_images)
         )
+        if vis_extrinsics:
+            rvecs, tvecs, _, _ = compute_extrinsics(
+                img_paths, train_ids, cam_params[-1], cached_images
+            )
+            visualize(rvecs, tvecs, cam_params[-1]["mtx"])
 
     if vis_hist:
         plt.hist(test_err)
