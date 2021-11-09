@@ -9,6 +9,7 @@ import tqdm
 from calibrate_intrinsics import calibrate, compute_extrinsics, evaluate_reprojection
 from opencv_visualize_extrinsics import visualize
 from prune import prune
+from constants import SQUARE_SIZE
 
 
 # read images names from data folder
@@ -54,6 +55,7 @@ def optimize(
     vis_hist=False,
     vis_extrinsics=True,
     num_grid_corners=(7, 9),
+    square_size=SQUARE_SIZE,
 ):
 
     cached_images = {}
@@ -164,6 +166,13 @@ def args_parse():
         type=int,
         nargs=2,
         help="The number of rows and columns of corners",
+    )
+    parser.add_argument(
+        "-",
+        "--square-size",
+        default=SQUARE_SIZE,
+        type=float,
+        help="The size of a single calibration square in meters",
     )
     args = parser.parse_args()
     assert args.datadir.is_dir()

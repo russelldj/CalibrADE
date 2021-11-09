@@ -111,17 +111,18 @@ def calibrate_images(
         "objpoints": objpoints,
         "imgpoints": imgpoints,
         "num_grid_corners": num_grid_corners,
+        "square_size": square_size,
     }
     return calibration_params
 
 
-def calibrate(image_names, train_ids, cached_images, num_grid_corners):
+def calibrate(image_names, train_ids, cached_images, num_grid_corners, **kwargs):
     """
     Thin wrapper around calibrate_images which selects from the valid set
     """
     valid_images = image_names[train_ids]
     calib_results = calibrate_images(
-        valid_images, cached_images, num_grid_corners=num_grid_corners
+        valid_images, cached_images, num_grid_corners=num_grid_corners, **kwargs
     )
     return calib_results
 
