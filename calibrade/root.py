@@ -1,13 +1,12 @@
 import argparse
+import pdb
 from ast import parse
 from pathlib import Path
-import pdb
+
 import matplotlib.pyplot as plt
-import tqdm
-
 import numpy as np
-
-from calibrate_intrinsics import calibrate, evaluate_reprojection, compute_extrinsics
+import tqdm
+from calibrate_intrinsics import calibrate, compute_extrinsics, evaluate_reprojection
 from opencv_visualize_extrinsics import visualize
 from prune import prune
 
@@ -80,7 +79,13 @@ def optimize(
             rvecs, tvecs, _, _ = compute_extrinsics(
                 img_paths, train_ids, cam_params[-1], cached_images
             )
-            visualize(rvecs, tvecs, cam_params[-1]["mtx"])
+            visualize(
+                rvecs,
+                tvecs,
+                cam_params[-1]["mtx"],
+                board_height=num_grid_corners[0],
+                board_width=num_grid_corners[1],
+            )
 
     if vis_hist:
         plt.hist(test_err)

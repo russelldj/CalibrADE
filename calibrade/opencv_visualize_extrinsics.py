@@ -5,11 +5,12 @@
 from __future__ import print_function
 
 import argparse
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # pylint: disable=unused-variable
 
 import cv2 as cv
+import matplotlib.pyplot as plt
 import numpy as np
+from constants import SQUARE_SIZE
+from mpl_toolkits.mplot3d import Axes3D  # pylint: disable=unused-variable
 from numpy import linspace
 
 
@@ -233,7 +234,7 @@ def visualize(
     scale_focal=40,
     board_width=9,
     board_height=6,
-    square_size=0.025,
+    square_size=SQUARE_SIZE,
     pattern_centric=True,
 ):
     """

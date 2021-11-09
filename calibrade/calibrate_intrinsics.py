@@ -1,14 +1,14 @@
 import glob
 import logging
-from pathlib import Path
 import os
 import pdb
 import pickle
+from pathlib import Path
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-from constants import DATA_FOLDER
+from constants import DATA_FOLDER, SQUARE_SIZE
 
 # termination criteria
 CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -57,13 +57,18 @@ def read_cached_image(fname, cached_images):
 # Taken from
 # https://opencv24-python-tutorials.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
 def calibrate_images(
-    image_names, cached_images, num_grid_corners=NUM_GRID_CORNERS, vis=False
+    image_names,
+    cached_images,
+    num_grid_corners=NUM_GRID_CORNERS,
+    square_size=SQUARE_SIZE,
+    vis=False,
 ):
 
     # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
     objp = np.zeros((num_grid_corners[0] * num_grid_corners[1], 3), np.float32)
-    objp[:, :2] = np.mgrid[0 : num_grid_corners[0], 0 : num_grid_corners[1]].T.reshape(
-        -1, 2
+    objp[:, :2] = (
+        np.mgrid[0 : num_grid_corners[0], 0 : num_grid_corners[1]].T.reshape(-1, 2)
+        * square_size
     )
 
     # Arrays to store object points and image points from all the images.
