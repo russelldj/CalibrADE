@@ -49,6 +49,7 @@ def optimize(
     img_paths, test_ids, global_train_ids, max_iter, train_subset_perc, vis_hist=False
 ):
 
+    cached_images = {}
     test_err = []
     cam_params = []
     train_subset_ids_list = []
@@ -59,10 +60,12 @@ def optimize(
         train_subset_ids_list.append(train_ids)
         # calibration
         print("Calibrating")
-        cam_params.append(calibrate(img_paths, train_ids))
+        cam_params.append(calibrate(img_paths, train_ids, cached_images))
         # evaluation
         print("Evaluating")
-        test_err.append(evaluate_reprojection(img_paths, test_ids, cam_params[-1]))
+        test_err.append(evaluate_reprojection(
+            img_paths, test_ids, cam_params[-1], cached_images
+        ))
 
     if vis_hist:
         plt.hist(test_err)

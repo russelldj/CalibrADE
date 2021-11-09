@@ -40,9 +40,19 @@ def get_cached_corners(image_path, gray, num_grid_corners):
         return (ret, corners)
 
 
+def read_cached_image(fname, cached_images):
+    try:
+        return cached_images[str(fname)]
+    except KeyError:
+        image = cv2.imread(str(fname))
+        cached_images[str(fname)] = image
+        return image
+
+
 # Taken from
 # https://opencv24-python-tutorials.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
-def calibrate_images(image_names, num_grid_corners=NUM_GRID_CORNERS, vis=False):
+def calibrate_images(image_names, cached_images,
+                     num_grid_corners=NUM_GRID_CORNERS, vis=False):
 
     # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
     objp = np.zeros((num_grid_corners[0] * num_grid_corners[1], 3), np.float32)
@@ -55,7 +65,7 @@ def calibrate_images(image_names, num_grid_corners=NUM_GRID_CORNERS, vis=False):
     imgpoints = []  # 2d points in image plane.
 
     for fname in image_names:
-        img = cv2.imread(str(fname))
+        img = read_cached_image(fname, cached_images)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # Find the chess board corners
@@ -97,12 +107,12 @@ def calibrate_images(image_names, num_grid_corners=NUM_GRID_CORNERS, vis=False):
     return calibration_params
 
 
-def calibrate(image_names, train_ids):
+def calibrate(image_names, train_ids, cached_images):
     """
     Thin wrapper around calibrate_images which selects from the valid set
     """
     valid_images = image_names[train_ids]
-    calib_results = calibrate_images(valid_images)
+    calib_results = calibrate_images(valid_images, cached_images)
     return calib_results
 
 
@@ -136,7 +146,7 @@ def calculate_reprojection_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist):
     return average_error
 
 
-def evaluate_reprojection(image_paths, test_ids, params):
+def evaluate_reprojection(image_paths, test_ids, params, cached_images):
     valid_images = image_paths[test_ids]
 
     mtx = params["mtx"]
@@ -147,7 +157,7 @@ def evaluate_reprojection(image_paths, test_ids, params):
     all_imgpoints = []
 
     for fname in valid_images:
-        img = cv2.imread(str(fname))
+        img = read_cached_image(fname, cached_images)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         ret, corners = get_cached_corners(fname, gray, num_grid_corners)
         if ret:
