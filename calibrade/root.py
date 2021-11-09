@@ -5,7 +5,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import tqdm
+from tqdm import tqdm
 from calibrate_intrinsics import calibrate, compute_extrinsics, evaluate_reprojection
 from opencv_visualize_extrinsics import visualize
 from prune import prune
@@ -66,13 +66,9 @@ def optimize(
     test_err = []
     cam_params = []
     train_subset_ids_list = []
-    for _ in range(0, max_iter):
-        print(f"Running iteration {_} / {max_iter}")
-        # random subset of train ids
+    for i in tqdm(range(0, max_iter), desc="Main optimization loop"):
         train_ids = select_subset_num(train_subset_num, global_train_ids)
         train_subset_ids_list.append(train_ids)
-        # calibration
-        print("Calibrating")
         cam_params.append(
             calibrate(
                 img_paths,
@@ -82,8 +78,6 @@ def optimize(
                 square_size=square_size,
             )
         )
-        # evaluation
-        print("Evaluating")
         test_err.append(
             evaluate_reprojection(img_paths, test_ids, cam_params[-1], cached_images)
         )
@@ -167,7 +161,7 @@ def args_parse():
         "-r",
         "--train-subset-num",
         default=25,
-        type=float,
+        type=int,
         help="number of samples from global train set to be sampled for an optimization iteration",
     )
     parser.add_argument(

@@ -265,8 +265,7 @@ def visualize(
         Is the camera considered to be moving
     """
 
-    fig = plt.figure()
-    ax = fig.gca(projection="3d")
+    ax = plt.axes(projection="3d")
     ax.set_aspect("auto")
     translations = np.concatenate(translations, axis=1).transpose()
     rotations = np.concatenate(rotations, axis=1).transpose()
