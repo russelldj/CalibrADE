@@ -1,0 +1,4 @@
+outs:
+- md5: 25345147b8d7c3aaea0b1c6d12fcd41e
+  size: 524316
+  path: chessboard_corners.pickle
