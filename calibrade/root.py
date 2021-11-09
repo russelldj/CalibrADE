@@ -31,13 +31,17 @@ def prune_wrapper(img_paths):
     return prune_ids
 
 
-# deciding the subset test split
-def select_subset(split_perc, ids):
+def select_subset_num(subset_size, ids):
     subset_ids = np.zeros(len(ids), dtype=bool)
-    subset_size = int(split_perc / 100 * np.sum(ids))
     options = np.where(ids)[0]
     subset_ids[np.random.choice(options, size=subset_size, replace=False)] = True
     return subset_ids
+
+
+# deciding the subset test split
+def select_subset_perc(split_perc, ids):
+    subset_size = int(split_perc / 100 * np.sum(ids))
+    return select_subset_num(subset_size, ids)
 
 
 # additional visualize dataset dump (common for test or train set)
@@ -51,9 +55,9 @@ def optimize(
     test_ids,
     global_train_ids,
     max_iter,
-    train_subset_perc,
+    train_subset_num,
     vis_hist=False,
-    vis_extrinsics=True,
+    vis_extrinsics=False,
     num_grid_corners=(7, 9),
     square_size=SQUARE_SIZE,
 ):
@@ -65,12 +69,18 @@ def optimize(
     for _ in range(0, max_iter):
         print(f"Running iteration {_} / {max_iter}")
         # random subset of train ids
-        train_ids = select_subset(train_subset_perc, global_train_ids)
+        train_ids = select_subset_num(train_subset_num, global_train_ids)
         train_subset_ids_list.append(train_ids)
         # calibration
         print("Calibrating")
         cam_params.append(
-            calibrate(img_paths, train_ids, cached_images, num_grid_corners)
+            calibrate(
+                img_paths,
+                train_ids,
+                cached_images,
+                num_grid_corners,
+                square_size=square_size,
+            )
         )
         # evaluation
         print("Evaluating")
@@ -78,9 +88,9 @@ def optimize(
             evaluate_reprojection(img_paths, test_ids, cam_params[-1], cached_images)
         )
         if vis_extrinsics:
-            rvecs, tvecs, _, _ = compute_extrinsics(
-                img_paths, train_ids, cam_params[-1], cached_images
-            )
+            rvecs = cam_params[-1]["rvecs"]
+            tvecs = cam_params[-1]["tvecs"]
+
             visualize(
                 rvecs,
                 tvecs,
@@ -107,7 +117,7 @@ def root(args):
     prune_ids = prune_wrapper(img_paths)
 
     print("Selecting a subset from pruned as the test set")
-    test_ids = select_subset(args.test_set_split_perc, prune_ids)
+    test_ids = select_subset_perc(args.test_set_split_perc, prune_ids)
     global_train_ids = np.invert(test_ids)
 
     print("Calling calibration on a series of images")
@@ -116,9 +126,11 @@ def root(args):
         test_ids=test_ids,
         global_train_ids=global_train_ids,
         max_iter=args.max_iter,
-        train_subset_perc=args.train_subset_perc,
+        train_subset_num=args.train_subset_num,
         vis_hist=args.vis_optimize_hist,
+        vis_extrinsics=args.vis_extrinsics,
         num_grid_corners=args.num_grid_corners,
+        square_size=args.square_size,
     )
 
 
@@ -146,11 +158,17 @@ def args_parse():
         help="Plot the histogram visualization from optimization",
     )
     parser.add_argument(
+        "-e",
+        "--vis-extrinsics",
+        action="store_true",
+        help="Plot the histogram visualization from optimization",
+    )
+    parser.add_argument(
         "-r",
-        "--train-subset-perc",
-        default=70,
+        "--train-subset-num",
+        default=25,
         type=float,
-        help="percentage of samples from global train set to be sampled for an optimization iteration",
+        help="number of samples from global train set to be sampled for an optimization iteration",
     )
     parser.add_argument(
         "-m",
@@ -168,7 +186,7 @@ def args_parse():
         help="The number of rows and columns of corners",
     )
     parser.add_argument(
-        "-",
+        "-s",
         "--square-size",
         default=SQUARE_SIZE,
         type=float,
