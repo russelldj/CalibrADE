@@ -34,6 +34,11 @@ def get_cached_corners(image_path, gray, num_grid_corners):
         return saved[image_path.name]
     except KeyError:
         ret, corners = cv2.findChessboardCorners(gray, num_grid_corners, None)
+        # Do subpixel refinement
+        if ret:
+            # TODO determine these constants
+            corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), CRITERIA)
+
         saved[image_path.name] = (ret, corners)
         with open(pickle_path, "wb") as handle:
             pickle.dump(saved, handle)
@@ -51,8 +56,9 @@ def read_cached_image(fname, cached_images):
 
 # Taken from
 # https://opencv24-python-tutorials.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
-def calibrate_images(image_names, cached_images,
-                     num_grid_corners=NUM_GRID_CORNERS, vis=False):
+def calibrate_images(
+    image_names, cached_images, num_grid_corners=NUM_GRID_CORNERS, vis=False
+):
 
     # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
     objp = np.zeros((num_grid_corners[0] * num_grid_corners[1], 3), np.float32)
@@ -70,18 +76,15 @@ def calibrate_images(image_names, cached_images,
 
         # Find the chess board corners
         ret, corners = get_cached_corners(fname, gray, num_grid_corners)
-
         # If found, add object points, image points (after refining them)
         if ret:
             objpoints.append(objp)
-            # TODO determine these constants
-            corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), CRITERIA)
-            imgpoints.append(corners2)
+            imgpoints.append(corners)
 
         if vis:
             if ret:
                 # Draw and display the corners
-                img = cv2.drawChessboardCorners(img, num_grid_corners, corners2, ret)
+                img = cv2.drawChessboardCorners(img, num_grid_corners, corners, ret)
                 title = "Detected control points"
             else:
                 title = "Failed control point detection"
@@ -107,12 +110,14 @@ def calibrate_images(image_names, cached_images,
     return calibration_params
 
 
-def calibrate(image_names, train_ids, cached_images):
+def calibrate(image_names, train_ids, cached_images, num_grid_corners):
     """
     Thin wrapper around calibrate_images which selects from the valid set
     """
     valid_images = image_names[train_ids]
-    calib_results = calibrate_images(valid_images, cached_images)
+    calib_results = calibrate_images(
+        valid_images, cached_images, num_grid_corners=num_grid_corners
+    )
     return calib_results
 
 
@@ -146,12 +151,14 @@ def calculate_reprojection_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist):
     return average_error
 
 
-def evaluate_reprojection(image_paths, test_ids, params, cached_images):
+# def evaluate_reprojection(image_paths, test_ids, params, cached_images):
+def compute_extrinsics(image_paths, test_ids, params, cached_images):
     valid_images = image_paths[test_ids]
 
+    objpoints = params["objpoints"]
+    num_grid_corners = params["num_grid_corners"]
     mtx = params["mtx"]
     dist = params["dist"]
-    num_grid_corners = params["num_grid_corners"]
 
     # The detected corners in the image
     all_imgpoints = []
@@ -161,17 +168,10 @@ def evaluate_reprojection(image_paths, test_ids, params, cached_images):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         ret, corners = get_cached_corners(fname, gray, num_grid_corners)
         if ret:
-            # TODO determine these constants
-            corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), CRITERIA)
-            all_imgpoints.append(corners2)
+            all_imgpoints.append(corners)
 
     # The object is the same in all frames. Replicate it for each image
-    all_objpoints = [params["objpoints"][0]] * len(all_imgpoints)
-
-    # TODO solve for the extrinsics
-    # Python: cv2.solvePnP(objectPoints, imagePoints, cameraMatrix, distCoeffs[, rvec[, tvec[, useExtrinsicGuess[, flags]]]]) → retval, rvec, tvec¶
-
-    # Consider renaming mtx and dist
+    all_objpoints = [objpoints[0]] * len(all_imgpoints)
     rvecs = []
     tvecs = []
 
@@ -184,6 +184,19 @@ def evaluate_reprojection(image_paths, test_ids, params, cached_images):
             tvecs.append(tvec)
             successful_objpoints.append(objpoints)
             successful_imgpoints.append(imgpoints)
+    return rvecs, tvecs, successful_objpoints, successful_imgpoints
+
+
+def evaluate_reprojection(image_paths, test_ids, params, cached_images):
+
+    mtx = params["mtx"]
+    dist = params["dist"]
+
+    rvecs, tvecs, successful_objpoints, successful_imgpoints = compute_extrinsics(
+        image_paths, test_ids, params, cached_images
+    )
+    # Consider renaming mtx and dist
+    # TODO, also report the number that were correctly triangulated
     error = calculate_reprojection_error(
         successful_objpoints, successful_imgpoints, rvecs, tvecs, mtx, dist
     )

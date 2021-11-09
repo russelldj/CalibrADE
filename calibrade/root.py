@@ -46,7 +46,13 @@ def visualize_set(img_paths, ids, tag):  # tag decides if its train or test fold
 
 
 def optimize(
-    img_paths, test_ids, global_train_ids, max_iter, train_subset_perc, vis_hist=False
+    img_paths,
+    test_ids,
+    global_train_ids,
+    max_iter,
+    train_subset_perc,
+    vis_hist=False,
+    num_grid_corners=(7, 9),
 ):
 
     cached_images = {}
@@ -60,12 +66,14 @@ def optimize(
         train_subset_ids_list.append(train_ids)
         # calibration
         print("Calibrating")
-        cam_params.append(calibrate(img_paths, train_ids, cached_images))
+        cam_params.append(
+            calibrate(img_paths, train_ids, cached_images, num_grid_corners)
+        )
         # evaluation
         print("Evaluating")
-        test_err.append(evaluate_reprojection(
-            img_paths, test_ids, cam_params[-1], cached_images
-        ))
+        test_err.append(
+            evaluate_reprojection(img_paths, test_ids, cam_params[-1], cached_images)
+        )
 
     if vis_hist:
         plt.hist(test_err)
@@ -96,6 +104,7 @@ def root(args):
         max_iter=args.max_iter,
         train_subset_perc=args.train_subset_perc,
         vis_hist=args.vis_optimize_hist,
+        num_grid_corners=args.num_grid_corners,
     )
 
 
@@ -135,6 +144,14 @@ def args_parse():
         default=100,
         type=int,
         help="max number of optimization iterations",
+    )
+    parser.add_argument(
+        "-c",
+        "--num-grid-corners",
+        default=(7, 9),
+        type=int,
+        nargs=2,
+        help="The number of rows and columns of corners",
     )
     args = parser.parse_args()
     assert args.datadir.is_dir()
