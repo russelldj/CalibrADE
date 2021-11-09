@@ -5,6 +5,8 @@
 from __future__ import print_function
 
 import argparse
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # pylint: disable=unused-variable
 
 import cv2 as cv
 import numpy as np
@@ -148,6 +150,37 @@ def draw_camera_boards(
     square_size,
     patternCentric,
 ):
+    """
+    ax : ?
+        ?
+    camera_matrix : np.ndarray
+        K matrix
+    cam_width : float
+        ?
+    cam_height : float
+        ?
+    scale_focal : float
+        ?
+    extrinsics : np.ndarray
+        num_points, 6.
+        Rotations which will be converted to Rodrigues format, translation
+    board_width : int
+        ?
+    board_height : int
+        ?
+    sqaure_size : float
+        ?
+    patternCentric: bool
+        Is the camera considered to be moving
+    """
+    print(f"cam_width   {cam_width  }")
+    print(f"cam_height  {cam_height }")
+    # print(f"board_width   {board_width  }")
+    # print(f"board_height  {board_height }")
+    # print(f"square_size   {square_size  }")
+    # print(f"camera_matrix {camera_matrix}")
+    # print(f"extrinsics    {extrinsics   }")
+    breakpoint()
     from matplotlib import cm
 
     min_values = np.zeros((3, 1))
@@ -199,6 +232,61 @@ def draw_camera_boards(
     return min_values, max_values
 
 
+def visualize(
+    rotations,
+    translations,
+    camera_matrix,
+    cam_width=0.032,
+    cam_height=0.024,
+    scale_focal=40,
+    board_width=9,
+    board_height=6,
+    square_size=0.025,
+    pattern_centric=True,
+):
+    """
+    ax : ?
+        ?
+    camera_matrix : np.ndarray
+        K matrix
+    cam_width : float
+        ?
+    cam_height : float
+        ?
+    scale_focal : float
+        ?
+    extrinsics : np.ndarray
+        num_points, 6.
+        Rotations which will be converted to Rodrigues format, translation
+    board_width : int
+        ?
+    board_height : int
+        ?
+    sqaure_size : float
+        ?
+    patternCentric: bool
+        Is the camera considered to be moving
+    """
+
+    fig = plt.figure()
+    ax = fig.gca(projection="3d")
+    ax.set_aspect("auto")
+    extrinsics = None
+
+    draw_camera_boards(
+        ax,
+        camera_matrix,
+        extrinsics=extrinsics,
+        cam_width=cam_width,
+        cam_height=cam_height,
+        scale_focal=scale_focal,
+        board_width=board_width,
+        board_height=board_height,
+        square_size=square_size,
+        pattern_centric=pattern_centric,
+    )
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Plot camera calibration extrinsics.",
@@ -243,9 +331,6 @@ def main():
     square_size = fs.getNode("square_size").real()
     camera_matrix = fs.getNode("camera_matrix").mat()
     extrinsics = fs.getNode("extrinsic_parameters").mat()
-
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D  # pylint: disable=unused-variable
 
     fig = plt.figure()
     ax = fig.gca(projection="3d")

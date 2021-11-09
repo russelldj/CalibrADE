@@ -200,5 +200,5 @@ if __name__ == "__main__":
     visualize_undistortion(
         undistortion_image_path, calibration_params["mtx"], calibration_params["dist"]
     )
-    average_error = calculate_error(**calibration_params)
+    average_error = calculate_reprojection_error(**calibration_params)
     print(f"Average error is {average_error} pixels")
