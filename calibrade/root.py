@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from calibrate_intrinsics import calibrate, compute_extrinsics, evaluate_reprojection
-from opencv_visualize_extrinsics import visualize
+from visualize import visualize
 from prune import prune
 from constants import SQUARE_SIZE
 
