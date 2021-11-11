@@ -4,9 +4,13 @@
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
-import cv2 as cv
+import argparse
 
+import cv2 as cv
+import matplotlib.pyplot as plt
+import numpy as np
+from constants import SQUARE_SIZE
+from mpl_toolkits.mplot3d import Axes3D  # pylint: disable=unused-variable
 from numpy import linspace
 
 
@@ -147,6 +151,29 @@ def draw_camera_boards(
     square_size,
     patternCentric,
 ):
+    """
+    ax : ?
+        ?
+    camera_matrix : np.ndarray
+        K matrix
+    cam_width : float
+        ?
+    cam_height : float
+        ?
+    scale_focal : float
+        ?
+    extrinsics : np.ndarray
+        num_points, 6.
+        Rotations which will be converted to Rodrigues format, translation
+    board_width : int
+        ?
+    board_height : int
+        ?
+    sqaure_size : float
+        ?
+    patternCentric: bool
+        Is the camera considered to be moving
+    """
     from matplotlib import cm
 
     min_values = np.zeros((3, 1))
@@ -198,9 +225,91 @@ def draw_camera_boards(
     return min_values, max_values
 
 
-def main():
-    import argparse
+def visualize(
+    rotations,
+    translations,
+    camera_matrix,
+    cam_width=0.032,
+    cam_height=0.024,
+    scale_focal=40,
+    board_width=9,
+    board_height=6,
+    square_size=SQUARE_SIZE,
+    pattern_centric=True,
+):
+    """
+    ax : ?
+        ?
+    rotations: list[np.ndarray]
+        ?
+    translations: list[np.ndarray]
+        ?
+    camera_matrix : np.ndarray
+        K matrix
+    cam_width : float
+        ?
+    cam_height : float
+        ?
+    scale_focal : float
+        ?
+    extrinsics : np.ndarray
+        num_points, 6.
+        Rotations which will be converted to Rodrigues format, translation
+    board_width : int
+        ?
+    board_height : int
+        ?
+    sqaure_size : float
+        ?
+    patternCentric: bool
+        Is the camera considered to be moving
+    """
 
+    ax = plt.axes(projection="3d")
+    ax.set_aspect("auto")
+    translations = np.concatenate(translations, axis=1).transpose()
+    rotations = np.concatenate(rotations, axis=1).transpose()
+
+    extrinsics = np.concatenate((rotations, translations), axis=1)
+    assert extrinsics.shape[1] == 6
+
+    min_values, max_values = draw_camera_boards(
+        ax,
+        camera_matrix,
+        extrinsics=extrinsics,
+        cam_width=cam_width,
+        cam_height=cam_height,
+        scale_focal=scale_focal,
+        board_width=board_width,
+        board_height=board_height,
+        square_size=square_size,
+        patternCentric=pattern_centric,
+    )
+
+    X_min = min_values[0]
+    X_max = max_values[0]
+    Y_min = min_values[1]
+    Y_max = max_values[1]
+    Z_min = min_values[2]
+    Z_max = max_values[2]
+    max_range = np.array([X_max - X_min, Y_max - Y_min, Z_max - Z_min]).max() / 2.0
+
+    mid_x = (X_max + X_min) * 0.5
+    mid_y = (Y_max + Y_min) * 0.5
+    mid_z = (Z_max + Z_min) * 0.5
+    ax.set_xlim(mid_x - max_range, mid_x + max_range)
+    ax.set_ylim(mid_y - max_range, mid_y + max_range)
+    ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+    ax.set_xlabel("x")
+    ax.set_ylabel("z")
+    ax.set_zlabel("-y")
+    ax.set_title("Extrinsic Parameters Visualization")
+
+    plt.show()
+
+
+def parse_args():
     parser = argparse.ArgumentParser(
         description="Plot camera calibration extrinsics.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -232,6 +341,11 @@ def main():
         help="The calibration board is static and the camera is moving.",
     )
     args = parser.parse_args()
+    return args
+
+
+def main():
+    args = parse_args()
 
     fs = cv.FileStorage(cv.samples.findFile(args.calibration), cv.FILE_STORAGE_READ)
     board_width = int(fs.getNode("board_width").real())
@@ -239,9 +353,6 @@ def main():
     square_size = fs.getNode("square_size").real()
     camera_matrix = fs.getNode("camera_matrix").mat()
     extrinsics = fs.getNode("extrinsic_parameters").mat()
-
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D  # pylint: disable=unused-variable
 
     fig = plt.figure()
     ax = fig.gca(projection="3d")
