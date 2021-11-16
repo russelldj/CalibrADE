@@ -1,3 +1,4 @@
+import argparse
 import glob
 import logging
 import os
@@ -8,7 +9,10 @@ from pathlib import Path
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+
 from constants import DATA_FOLDER, SQUARE_SIZE
+from util import read_data, timestamp
+
 
 # termination criteria
 CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -127,7 +131,7 @@ def calibrate(image_names, train_ids, cached_images, num_grid_corners, **kwargs)
     return calib_results
 
 
-def visualize_undistortion(image_path, mtx, dist):
+def visualize_undistortion(image_path, mtx, dist, vis_path=None):
     # Undistort
     img = cv2.imread(str(image_path))
     h, w = img.shape[:2]
@@ -139,12 +143,18 @@ def visualize_undistortion(image_path, mtx, dist):
     # crop the image
     x, y, w, h = roi
     dst = dst[y : y + h, x : x + w]
-    plt.imshow(np.flip(dst, axis=2))
-    plt.title("Undistorted image")
-    plt.pause(PAUSE_INTERVAL)
+    if vis_path is None:
+        plt.imshow(np.flip(dst, axis=2))
+        plt.title("Undistorted image")
+        plt.pause(PAUSE_INTERVAL)
+    else:
+        dst = cv2.resize(dst, dsize=img.shape[:2][::-1])
+        cv2.imwrite(str(vis_path), np.hstack((img, dst)))
 
 
-def calculate_reprojection_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist):
+def calculate_reprojection_error(
+    objpoints, imgpoints, rvecs, tvecs, mtx, dist, **kwargs
+):
     total_error = 0
     for i in range(len(objpoints)):
         imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
@@ -210,14 +220,61 @@ def evaluate_reprojection(image_paths, test_ids, params, cached_images):
 
 
 if __name__ == "__main__":
-    calibration_image_paths = glob.glob(
-        os.path.join(DATA_FOLDER, "opencv_examples", "left*.jpg")
+    parser = argparse.ArgumentParser(
+        prog="calibrate_intrinsics",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    calibration_params = calibrate_images(calibration_image_paths)
+    parser.add_argument("datadir", type=Path, help="directory containing all images")
+    parser.add_argument(
+        "-v",
+        "--visualize-undistortion",
+        action="store_true",
+        help="Whether to visualize undistorted images in /tmp/ (will print path)",
+    )
+    parser.add_argument(
+        "-s",
+        "--sample-number",
+        type=int,
+        default=0,
+        help="How many (randomly sampled) images to run calibration on",
+    )
+    args = parser.parse_args()
 
-    undistortion_image_path = os.path.join(DATA_FOLDER, "opencv_examples", "left12.jpg")
-    visualize_undistortion(
-        undistortion_image_path, calibration_params["mtx"], calibration_params["dist"]
-    )
+    # Take a sampled set of images if asked for them
+    image_paths = read_data(args.datadir)
+
+    if args.sample_number > 0:
+        sampled_paths = np.random.choice(
+            image_paths, size=args.sample_number, replace=False
+        )
+    else:
+        sampled_paths = image_paths
+    calibration_params = calibrate_images(sampled_paths, cached_images={})
+
+    # Choose a random set of images to visualize
+    if args.visualize_undistortion:
+        for image_choice in np.random.choice(image_paths, size=4, replace=False):
+            nameized = str(image_choice).replace("/", "_")
+            vis_path = Path(f"/tmp/{timestamp()}_{nameized}")
+            visualize_undistortion(
+                image_choice,
+                calibration_params["mtx"],
+                calibration_params["dist"],
+                vis_path=vis_path,
+            )
+            print(f"Saved debug undistorted image {vis_path}")
+
     average_error = calculate_reprojection_error(**calibration_params)
+    # TODO: look into whether average error is actually pixels
     print(f"Average error is {average_error} pixels")
+
+    # Save certain data from this run for the future. Copy the variable for
+    # name clarity
+    save_data = calibration_params
+    save_data["sampled_paths"] = sampled_paths
+    save_data["average_error"] = average_error
+    save_path = args.datadir.joinpath(
+        f"randomrun_{len(sampled_paths)}samples_{timestamp()}.pickle"
+    )
+    with open(save_path, "wb") as handle:
+        pickle.dump(save_data, handle)
