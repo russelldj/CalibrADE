@@ -6,21 +6,13 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
+
 from calibrate_intrinsics import calibrate, compute_extrinsics, evaluate_reprojection
-from visualize import visualize
-from prune import prune
 from constants import SQUARE_SIZE
+from prune import prune
+from util import read_data
+from visualize import visualize
 
-
-# read images names from data folder
-def read_data(datadir):
-    # read all image names and create path vector
-    img_paths = []
-    extensions = {"*.jpg", "*.JPG", "*png", "*.PNG"}
-    for ext in extensions:
-        img_paths.extend(list(datadir.glob(ext)))
-    img_paths = np.asarray(img_paths)
-    return img_paths
 
 
 # pruning
@@ -130,7 +122,10 @@ def root(args):
 
 def args_parse():
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        prog="root",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument("datadir", type=Path, help="directory containing all images")
     parser.add_argument(
         "-t",
