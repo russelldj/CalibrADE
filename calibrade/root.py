@@ -14,7 +14,6 @@ from util import read_data
 from visualize import visualize
 
 
-
 # pruning
 def prune_wrapper(img_paths):
     prune_ids_init = np.zeros(len(img_paths), dtype=bool)
@@ -83,6 +82,9 @@ def optimize(
                 cam_params[-1]["mtx"],
                 board_height=num_grid_corners[0],
                 board_width=num_grid_corners[1],
+                pattern_centric=False,
+                square_size=square_size,
+                image_shape=(1920, 1080),
             )
 
     if vis_hist:
