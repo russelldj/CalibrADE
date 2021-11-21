@@ -5,6 +5,8 @@ import os
 import pdb
 import pickle
 from pathlib import Path
+from sys import exit
+import traceback
 
 import cv2
 import matplotlib.pyplot as plt
@@ -226,10 +228,10 @@ if __name__ == "__main__":
     )
     parser.add_argument("datadir", type=Path, help="directory containing all images")
     parser.add_argument(
-        "-v",
-        "--visualize-undistortion",
+        "-r",
+        "--suppress-reprojection",
         action="store_true",
-        help="Whether to visualize undistorted images in /tmp/ (will print path)",
+        help="Whether to suppress the reprojection printout (for repeated runs)",
     )
     parser.add_argument(
         "-s",
@@ -237,6 +239,12 @@ if __name__ == "__main__":
         type=int,
         default=0,
         help="How many (randomly sampled) images to run calibration on",
+    )
+    parser.add_argument(
+        "-v",
+        "--visualize-undistortion",
+        action="store_true",
+        help="Whether to visualize undistorted images in /tmp/ (will print path)",
     )
     args = parser.parse_args()
 
@@ -249,7 +257,23 @@ if __name__ == "__main__":
         )
     else:
         sampled_paths = image_paths
-    calibration_params = calibrate_images(sampled_paths, cached_images={})
+
+    try:
+        calibration_params = calibrate_images(sampled_paths, cached_images={})
+    except cv2.error:
+        print("!" * 80)
+        print(f"WARNING! A calibration failed in {args.datadir}!")
+        print(f"Images: {sampled_paths}")
+        print("!" * 80)
+        print(traceback.format_exc())
+        print("!" * 80)
+        exit(0)
+
+
+    average_error = calculate_reprojection_error(**calibration_params)
+    # TODO: look into whether average error is actually pixels
+    if not args.suppress_reprojection:
+        print(f"Average reprojection error is {average_error}px")
 
     # Choose a random set of images to visualize
     if args.visualize_undistortion:
@@ -263,10 +287,6 @@ if __name__ == "__main__":
                 vis_path=vis_path,
             )
             print(f"Saved debug undistorted image {vis_path}")
-
-    average_error = calculate_reprojection_error(**calibration_params)
-    # TODO: look into whether average error is actually pixels
-    print(f"Average error is {average_error} pixels")
 
     # Save certain data from this run for the future. Copy the variable for
     # name clarity
