@@ -9,9 +9,10 @@ import argparse
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
-from constants import SQUARE_SIZE
 from mpl_toolkits.mplot3d import Axes3D  # pylint: disable=unused-variable
 from numpy import linspace
+
+from constants import SQUARE_SIZE
 
 
 def inverse_homogeneoux_matrix(M):
@@ -37,14 +38,16 @@ def transform_to_matplotlib_frame(cMo, X, inverse=False):
         return M.dot(cMo.dot(X))
 
 
-def create_camera_model(
-    camera_matrix, width, height, scale_focal, draw_frame_axis=False
-):
-    fx = camera_matrix[0, 0]
-    fy = camera_matrix[1, 1]
-    focal = 2 / (fx + fy)
-    f_scale = scale_focal * focal
-
+def create_camera_model(width, height, f_scale, draw_frame_axis=False):
+    """
+    width : float
+        Half frustum width
+    height : float
+        Half frustum height
+    f_scale : float
+        Scale everything by this value.
+        The focal length is assumed to be 1 in these units
+    """
     # draw image plane
     X_img_plane = np.ones((4, 5))
     X_img_plane[0:3, 0] = [-width, height, f_scale]
@@ -150,6 +153,7 @@ def draw_camera_boards(
     board_height,
     square_size,
     patternCentric,
+    image_shape,
 ):
     """
     ax : ?
@@ -181,17 +185,18 @@ def draw_camera_boards(
     max_values = np.zeros((3, 1))
     max_values = -np.inf
 
+    # TODO this could also be computed as the two times the principal point
+    focal_length = (camera_matrix[0, 0] + camera_matrix[1, 1]) / 2
+    cam_width = scale_focal * image_shape[0] / (focal_length * 2)
+    cam_height = scale_focal * image_shape[1] / (focal_length * 2)
+
     if patternCentric:
-        X_moving = create_camera_model(
-            camera_matrix, cam_width, cam_height, scale_focal
-        )
+        X_moving = create_camera_model(cam_width, cam_height, scale_focal)
         X_static = create_board_model(
             extrinsics, board_width, board_height, square_size
         )
     else:
-        X_static = create_camera_model(
-            camera_matrix, cam_width, cam_height, scale_focal, True
-        )
+        X_static = create_camera_model(cam_width, cam_height, scale_focal, True)
         X_moving = create_board_model(
             extrinsics, board_width, board_height, square_size
         )
@@ -231,11 +236,12 @@ def visualize(
     camera_matrix,
     cam_width=0.032,
     cam_height=0.024,
-    scale_focal=40,
+    scale_focal=1,
     board_width=9,
     board_height=6,
     square_size=SQUARE_SIZE,
     pattern_centric=True,
+    image_shape=(1920, 1080),
 ):
     """
     ax : ?
@@ -284,6 +290,7 @@ def visualize(
         board_height=board_height,
         square_size=square_size,
         patternCentric=pattern_centric,
+        image_shape=image_shape,
     )
 
     X_min = min_values[0]
