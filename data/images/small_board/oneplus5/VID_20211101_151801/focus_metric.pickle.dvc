@@ -1,0 +1,4 @@
+outs:
+- md5: c212f74379b69bb81768be30acbf4798
+  size: 18417
+  path: focus_metric.pickle
