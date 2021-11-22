@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from constants import DATA_FOLDER, SQUARE_SIZE
-from util import read_data, timestamp
+from prune import prune
+from util import get_cached_corners, read_data, timestamp
 
 
 # termination criteria
@@ -25,32 +26,6 @@ logger = logging.getLogger(__name__)
 NUM_GRID_CORNERS = (7, 9)
 
 
-def get_cached_corners(image_path, gray, num_grid_corners):
-
-    pickle_path = image_path.with_name("chessboard_corners.pickle")
-    try:
-        with open(pickle_path, "rb") as handle:
-            saved = pickle.load(handle)
-    except FileNotFoundError:
-        saved = dict()
-        with open(pickle_path, "wb") as handle:
-            pickle.dump(saved, handle)
-
-    try:
-        return saved[image_path.name]
-    except KeyError:
-        ret, corners = cv2.findChessboardCorners(gray, num_grid_corners, None)
-        # Do subpixel refinement
-        if ret:
-            # TODO determine these constants
-            corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), CRITERIA)
-
-        saved[image_path.name] = (ret, corners)
-        with open(pickle_path, "wb") as handle:
-            pickle.dump(saved, handle)
-        return (ret, corners)
-
-
 def read_cached_image(fname, cached_images):
     try:
         return cached_images[str(fname)]
@@ -58,6 +33,17 @@ def read_cached_image(fname, cached_images):
         image = cv2.imread(str(fname))
         cached_images[str(fname)] = image
         return image
+
+
+def sharpness_downsample(image_paths, ratio):
+    good_mask = prune(image_paths, NUM_GRID_CORNERS, ratio=ratio)
+    # Check that we hit our desired ratio to within 2% (chosen arbitrarily)
+    end_fraction = 1 - (np.sum(good_mask) / len(good_mask))
+    assert np.isclose(end_fraction, ratio, atol=0.02), (
+        f"Sharpness downsampling was supposed to leave {ratio} fraction of"
+        + f" the images, but it actually left {end_fraction}"
+    )
+    return image_paths[good_mask]
 
 
 # Taken from
@@ -228,6 +214,15 @@ if __name__ == "__main__":
     )
     parser.add_argument("datadir", type=Path, help="directory containing all images")
     parser.add_argument(
+        "-p",
+        "--sharpness-ratio",
+        type=float,
+        default=-1,
+        help="Fraction (0-1) of the images that we are asserting to be of bad"
+        " blur quality. For example, 0.25 means we will drop the bottom"
+        " 25%% and sample from the top 75%%",
+    )
+    parser.add_argument(
         "-r",
         "--suppress-reprojection",
         action="store_true",
@@ -248,12 +243,28 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # Take a sampled set of images if asked for them
+    # Find all images in the given directory
     image_paths = read_data(args.datadir)
 
+    # Downsample to a certain sharpness ratio if requested
+    if args.sharpness_ratio > 0:
+        image_paths = sharpness_downsample(image_paths, args.sharpness_ratio)
+        if len(image_paths) < args.sample_number:
+            print(
+                f"WARNING! Ratio {args.sharpness_ratio} downsampled down to"
+                f" {len(image_paths)} when we need to sample"
+                f" {args.sample_number}, ending"
+            )
+            exit(0)
+
+    # Take a sampled set of images if asked for them
     if args.sample_number > 0:
         sampled_paths = np.random.choice(
             image_paths, size=args.sample_number, replace=False
+        )
+        assert len(sampled_paths) == args.sample_number, (
+            f"Tried to sample to {args.sampled_number}, but could only get"
+            + f" {len(sampled_paths)} images with given settings"
         )
     else:
         sampled_paths = image_paths
@@ -268,7 +279,6 @@ if __name__ == "__main__":
         print(traceback.format_exc())
         print("!" * 80)
         exit(0)
-
 
     average_error = calculate_reprojection_error(**calibration_params)
     # TODO: look into whether average error is actually pixels
@@ -293,6 +303,7 @@ if __name__ == "__main__":
     save_data = calibration_params
     save_data["sampled_paths"] = sampled_paths
     save_data["average_error"] = average_error
+    save_data["sharpness_ratio"] = args.sharpness_ratio
     save_path = args.datadir.joinpath(
         f"randomrun_{len(sampled_paths)}samples_{timestamp()}.pickle"
     )

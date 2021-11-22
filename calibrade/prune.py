@@ -3,7 +3,11 @@ from pathlib import Path
 import cv2
 from matplotlib import pyplot
 import numpy
+import pickle
+from scipy.spatial import ConvexHull
 from skimage.morphology import binary_closing, binary_opening
+
+from util import get_cached_corners
 
 
 # The LAP2 filter measurement from here:
@@ -12,6 +16,28 @@ from skimage.morphology import binary_closing, binary_opening
 #   | I * Lx | + | I * Ly |
 # Where I is the image, * is convolution, Lx is [-1, 2, -1], and Ly is Lx.T
 KERNEL = numpy.array([-1, 2, -1])
+
+
+def get_cached_focus(path, num_grid_corners):
+    pickle_path = path.with_name("focus_metric.pickle")
+    try:
+        with open(pickle_path, "rb") as handle:
+            saved = pickle.load(handle)
+    except FileNotFoundError:
+        saved = dict()
+        with open(pickle_path, "wb") as handle:
+            pickle.dump(saved, handle)
+
+    try:
+        return saved[path.name]
+    except KeyError:
+        image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+        mask = target_mask(image, path, num_grid_corners)
+        focus = lap2_focus_measure(image.astype(float), mask)
+        saved[path.name] = focus
+        with open(pickle_path, "wb") as handle:
+            pickle.dump(saved, handle)
+        return focus
 
 
 def lap2_focus_measure(image, mask):
@@ -49,61 +75,83 @@ def cdf(x, normed=True, *args, **kwargs):
     return pyplot.plot(x, y, *args, **kwargs)
 
 
-# TODO: Make this real
-def target_mask(image):
+def target_mask(image, path, num_grid_corners):
     """
     Arguments:
         image: grayscale image of shape (N, M)
+        path: pathlib.Path object for the image
 
     Returns: Boolean mask of shape (N, M), which is True for pixels that
         we think are on the calibration target.
     """
-    return numpy.ones(image.shape[:2], dtype=bool)
+    ret, corners = get_cached_corners(
+        image_path=path, gray=image, num_grid_corners=num_grid_corners
+    )
+    if ret:
+        # Take the hull to get the outer 2D shape
+        hull = ConvexHull(corners.squeeze())
+        points2d = hull.points[hull.vertices]
+        # Scale the points outward slightly
+        scale = 1.3
+        center = numpy.average(points2d, axis=0)
+        for i in range(len(points2d)):
+            points2d[i] = center + scale * (points2d[i] - center)
+        # Clip to edges, note corners are (axis1, axis0)
+        points2d[:, 0] = numpy.clip(points2d[:, 0], 0, image.shape[1] - 1)
+        points2d[:, 1] = numpy.clip(points2d[:, 1], 0, image.shape[0] - 1)
+        # Make a boolean mask
+        mask = numpy.zeros(image.shape[:2], dtype=numpy.int32)
+        # import ipdb; ipdb.set_trace()
+        mask = cv2.fillPoly(
+            mask, [points2d.reshape((-1, 1, 2)).astype(numpy.int32)], color=1.0
+        )
+        mask = mask.astype(bool)
+    else:
+        mask = numpy.ones(image.shape[:2], dtype=bool)
+    return mask
 
 
-def prune(image_paths, ratio=0.5, plot=False, save_images=False):
+def prune(image_paths, num_grid_corners, ratio=0.5, plot=False, save_image_dir=None):
     """
     Arguments:
         image_paths: list of strings of paths to the images
+        num_grid_corners: int two-tuple like (7, 9) indicating the number of
+            corners we want to find in the image. Used to try and make a mask
+            of the board (area of interest)
         ratio: (float) fraction of the images that we are asserting to be of
-            good blur quality
+            bad blur quality. 0.25 means we will drop the bottom 25% and
+            take the top 75%.
         plot: (bool) show a plot of the blur values across the images (debug)
-        save_images: (bool) NOT IMPLEMENTED CURRENTLY - save visualization
-            images to double-check this process. SEE COMMENTED OUT CODE FOR
-            A PARTIAL IMPLEMENTATION.
+        save_image_dir: (None or pathlib.Path) If given a path, will saved
+            images showing the target mask and focus value on them (slow)
     """
 
     # Calculate the "focus" metric for each image
-    focus = []
-    for path in image_paths:
-        image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
-        mask = target_mask(image)
-        focus.append(lap2_focus_measure(image.astype(float), mask))
-    focus = numpy.array(focus)
+    focus = numpy.array(
+        [get_cached_focus(path, num_grid_corners) for path in image_paths]
+    )
 
-    # TODO: Make this sort of result visualization relevant again
-    # # Temporary code to evaluate images. Later, will turn into good/bad sorting
-    # # When only sorting images, perhaps use a copy tool?
-    # if save_images:
-    #     for path, value in zip(image_paths, focus):
-    #         image = cv2.imread(path)
-    #         image = cv2.putText(
-    #             image,
-    #             f"{value:.3E}",
-    #             (10, 100),
-    #             fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-    #             fontScale=2,
-    #             color=(0, 255, 0),
-    #             thickness=2,
-    #         )
-
-    #         grey_mask = target_mask(image).astype(numpy.uint8) * 255
-    #         color_mask = cv2.cvtColor(grey_mask, cv2.COLOR_GRAY2BGR)
-    #         image = numpy.hstack((image, color_mask))
-
-    #         newpath = good_dir.joinpath(Path(path).name)
-    #         cv2.imwrite(str(newpath), image)
-    #         print(f"Saved {newpath}")
+    # Code to evaluate images. Note particularly streamlined
+    if save_image_dir:
+        for path, value in zip(image_paths, focus):
+            image = cv2.imread(str(path))
+            image = cv2.putText(
+                image,
+                f"{value:.3E}",
+                (10, 100),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                fontScale=2,
+                color=(0, 255, 0),
+                thickness=2,
+            )
+            mask = target_mask(image, path, num_grid_corners)
+            # import ipdb; ipdb.set_trace()
+            masked_image = image[mask]
+            masked_image[:, 1] = 255
+            image[mask] = masked_image
+            newpath = save_image_dir.joinpath(path.name)
+            cv2.imwrite(str(newpath), image)
+            print(f"Saved {newpath}")
 
     # Choose the images in the top ratio as the images we are marking as
     # good quality
@@ -139,7 +187,10 @@ if __name__ == "__main__":
         "-p", "--plot", help="Whether to plot results", action="store_true"
     )
     parser.add_argument(
-        "-s", "--save", help="Save images to the folders", action="store_true"
+        "-s",
+        "--save-dir",
+        type=Path,
+        help="Path to directory that you want to save debug images in (slow)",
     )
     args = parser.parse_args()
     assert args.image_dir.is_dir(), f"{args.image_dir} needs to be a directory"
