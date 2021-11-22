@@ -7,7 +7,7 @@ The filenames will have the pattern
 import argparse
 from collections import defaultdict
 from glob import glob
-from matplotlib import pyplot
+from matplotlib import patches, pyplot
 import numpy
 from pathlib import Path
 import pickle
@@ -15,11 +15,10 @@ import pickle
 
 def id_from_path(path):
     """From a path to a sampled pickle file, extract an ID for that run.
-
     E.g. from this path
         '../data/images/big_board/eric_phone/PXL_20211101_190909831/randomrun_4samples_1637106542543904.pickle'
     the relevant ID is
-        big_board/eric_phone/PXL_20211101_190909831/
+        big_board/eric_phone/
     """
     # Strip off early stuff
     path = path.split("data/images/")[-1]
@@ -30,7 +29,7 @@ def id_from_path(path):
 class Variability:
     """Holder class for certain variables"""
     def __init__(self, fx, fy, cx, cy, distortion0, distortion1, distortion2,
-                 distortion3, distortion4):
+                 distortion3, distortion4, sharpness):
         self.fx = fx
         self.fy = fy
         self.cx = cx
@@ -40,24 +39,29 @@ class Variability:
         self.distortion2 = distortion2
         self.distortion3 = distortion3
         self.distortion4 = distortion4
-
-    # This could be smarter, but whatever
-    @classmethod
-    def length(self):
-        """Update this if more variables are added."""
-        return 9
+        self.sharpness = sharpness
 
 
 def extract_variability_data(all_pickles):
     by_id = defaultdict(lambda: defaultdict(list))
+    sharpness_options = set()
     for file in all_pickles:
         id_name = id_from_path(file)
         with open(file, "rb") as handle:
             data = pickle.load(handle)
         num_sampled = len(data["sampled_paths"])
+
         # These were included by accident, weed them out
         if num_sampled == 5:
             continue
+
+        # Capture the possible sharpnesses, with a default of 0
+        if "sharpness_ratio" in data:
+            sharpness = data["sharpness_ratio"]
+        else:
+            sharpness = 0
+        sharpness_options.add(sharpness)
+
         by_id[id_name][num_sampled].append(Variability(
             fx=data["mtx"][0, 0],
             fy=data["mtx"][1, 1],
@@ -68,28 +72,52 @@ def extract_variability_data(all_pickles):
             distortion2=data["dist"][0, 2],
             distortion3=data["dist"][0, 3],
             distortion4=data["dist"][0, 4],
+            sharpness=sharpness,
         ))
-    return by_id
+    return by_id, sharpness_options
 
 
 def variablity_vs_samples(all_pickles, figuredir):
-    by_id = extract_variability_data(all_pickles)
+    by_id, sharpness_options = extract_variability_data(all_pickles)
     for id_name, values in by_id.items():
-        height = int(numpy.ceil(Variability.length() / 2))
+        variables = [
+            "fx", "fy", "cx", "cy", "skip", "distortion0", "distortion1",
+            "distortion2", "distortion3", "distortion4"
+        ]
+        height = int(numpy.ceil(len(variables) / 2))
         figure, axes = pyplot.subplots(height, 2, figsize=(14, 10))
-        for i, variable in enumerate(["fx", "fy", "cx", "cy", "skip",
-                                      "distortion0", "distortion1",
-                                      "distortion2", "distortion3",
-                                      "distortion4"]):
-            if variable == "skip":
-                continue
+        for i, variable in enumerate(variables):
             axis = axes[i % height, i // height]
+            if variable == "skip":
+                axis.legend(*zip(*labels))
+                continue
+
+            labels = []
+            def add_label(violin, label):
+                color = violin["bodies"][0].get_facecolor().flatten()
+                labels.append((patches.Patch(color=color), label))
+
             axis.set_ylabel(variable)
-            samples = sorted(values.keys())
-            dataset = []
-            for sample in samples:
-                dataset.append([getattr(element, variable) for element in values[sample]])
-            axis.violinplot(dataset=dataset, positions=samples, widths=2)
+            samples = numpy.array(sorted(values.keys()))
+            for sharpness, offset in zip(sorted(sharpness_options),
+                                         [-1.25, 0, 1.25]):
+                chosen_samples = []
+                dataset = []
+                for sample in samples:
+                    row = [
+                        getattr(element, variable)
+                        for element in values[sample]
+                        if numpy.isclose(element.sharpness, sharpness)
+                    ]
+                    if len(row) > 0:
+                        chosen_samples.append(sample + offset)
+                        dataset.append(row)
+                add_label(
+                    axis.violinplot(dataset=dataset,
+                                    positions=chosen_samples,
+                                    widths=1.5),
+                    f"{sharpness:.2f}",
+                )
 
         axes[0, -1].set_xlabel("Number of randomly sampled images")
         axes[1, -1].set_xlabel("Number of randomly sampled images")
