@@ -3,10 +3,11 @@ import cv2
 from pathlib import Path
 
 from root import read_data
-from calibrate_intrinsics import get_cached_corners, NUM_GRID_CORNERS
+from calibrate_intrinsics import NUM_GRID_CORNERS
+from util import get_cached_corners
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("datadir", type=Path, help="directory containing all images")
     args = parser.parse_args()

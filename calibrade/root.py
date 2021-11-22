@@ -15,9 +15,9 @@ from visualize import visualize
 
 
 # pruning
-def prune_wrapper(img_paths):
+def prune_wrapper(img_paths, num_grid_corners):
     prune_ids_init = np.zeros(len(img_paths), dtype=bool)
-    prune_ids = prune(img_paths)
+    prune_ids = prune(img_paths, num_grid_corners)
 
     return prune_ids
 
@@ -102,7 +102,7 @@ def root(args):
     assert len(img_paths) > 0, f"Found 0 images in {args.datadir}"
 
     print("Selecting a pruned set")
-    prune_ids = prune_wrapper(img_paths)
+    prune_ids = prune_wrapper(img_paths, args.num_grid_corners)
 
     print("Selecting a subset from pruned as the test set")
     test_ids = select_subset_perc(args.test_set_split_perc, prune_ids)
