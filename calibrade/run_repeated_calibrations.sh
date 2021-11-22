@@ -5,7 +5,7 @@ PREFIX="$(pwd)/../data/images"
 for SCALE in 4 9 16 25 36
 do
     echo "Entering scale $SCALE"
-    for REPEAT in $(seq 50)
+    for REPEAT in $(seq 100)
     do
         echo "Entering repeat $REPEAT"
         for OUTER_DIR in "$PREFIX/big_board/eric_phone/" \
