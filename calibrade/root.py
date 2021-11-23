@@ -6,6 +6,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
+import scipy.optimize
+
 
 from calibrate_intrinsics import calibrate, compute_extrinsics, evaluate_reprojection
 from constants import SQUARE_SIZE
@@ -52,47 +54,61 @@ def optimize(
     num_grid_corners=(7, 9),
     square_size=SQUARE_SIZE,
 ):
-
     cached_images = {}
-    test_err = []
-    cam_params = []
-    train_subset_ids_list = []
-    for i in tqdm(range(0, max_iter), desc="Main optimization loop"):
-        train_ids = select_subset_num(train_subset_num, global_train_ids)
-        train_subset_ids_list.append(train_ids)
-        cam_params.append(
-            calibrate(
-                img_paths,
-                train_ids,
-                cached_images,
-                num_grid_corners,
-                square_size=square_size,
-            )
-        )
-        test_err.append(
-            evaluate_reprojection(img_paths, test_ids, cam_params[-1], cached_images)
-        )
-        if vis_extrinsics:
-            rvecs = cam_params[-1]["rvecs"]
-            tvecs = cam_params[-1]["tvecs"]
+    test_errs = []
+    bounds = [(0, 1)] * img_paths.shape[0]
 
-            visualize(
-                rvecs,
-                tvecs,
-                cam_params[-1]["mtx"],
-                board_height=num_grid_corners[0],
-                board_width=num_grid_corners[1],
-                pattern_centric=False,
-                square_size=square_size,
-                image_shape=(1920, 1080),
-            )
+    def compute_fitness(x):
+        sorted_inds = np.argsort(x)
+        top_inds = sorted_inds[-train_subset_num:]
+        train_ids = np.zeros(x.shape, dtype=bool)
+        train_ids[top_inds] = True
+        calibrated_params = calibrate(
+            img_paths,
+            train_ids,
+            cached_images,
+            num_grid_corners,
+            square_size=square_size,
+        )
+        test_err = evaluate_reprojection(
+            img_paths, test_ids, calibrated_params, cached_images
+        )
+        test_errs.append(test_err)
+        return test_err
+
+    res = scipy.optimize.differential_evolution(
+        compute_fitness, bounds=bounds, disp=True, maxiter=max_iter, popsize=1,
+    )
+
+    solution = res.x
+    sorted_inds = np.argsort(solution)
+    top_inds = sorted_inds[-train_subset_num:]
+    train_ids = np.zeros(solution.shape, dtype=bool)
+    train_ids[top_inds] = True
+    calibrated_params = calibrate(
+        img_paths, train_ids, cached_images, num_grid_corners, square_size=square_size,
+    )
+
+    if vis_extrinsics:
+        rvecs = calibrated_params["rvecs"]
+        tvecs = calibrated_params["tvecs"]
+
+        visualize(
+            rvecs,
+            tvecs,
+            calibrated_params["mtx"],
+            board_height=num_grid_corners[0],
+            board_width=num_grid_corners[1],
+            pattern_centric=False,
+            square_size=square_size,
+            image_shape=(1920, 1080),
+        )
 
     if vis_hist:
-        plt.hist(test_err)
+        plt.hist(test_errs)
         plt.show()
 
-    min_idx = np.argmin(test_err)
-    return cam_params[min_idx], train_subset_ids_list[min_idx]
+    return calibrated_params, train_ids
 
 
 def root(args):
@@ -125,8 +141,7 @@ def root(args):
 def args_parse():
 
     parser = argparse.ArgumentParser(
-        prog="root",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        prog="root", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("datadir", type=Path, help="directory containing all images")
     parser.add_argument(
@@ -157,7 +172,7 @@ def args_parse():
     parser.add_argument(
         "-r",
         "--train-subset-num",
-        default=25,
+        default=10,
         type=int,
         help="number of samples from global train set to be sampled for an optimization iteration",
     )
