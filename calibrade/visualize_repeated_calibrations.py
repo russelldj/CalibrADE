@@ -77,17 +77,35 @@ def extract_variability_data(all_pickles):
     return by_id, sharpness_options
 
 
-def variablity_vs_samples(all_pickles, figuredir):
+def variablity_vs_samples(all_pickles, figuredir, suppress_outliers,
+                          show_plot, specific_sharpness):
     by_id, sharpness_options = extract_variability_data(all_pickles)
+
+    # Override the discovered sharpnesses if requested:
+    if specific_sharpness is not None:
+        sharpness_options = {specific_sharpness}
+
     for id_name, values in by_id.items():
         variables = [
             "fx", "fy", "cx", "cy", "skip", "distortion0", "distortion1",
             "distortion2", "distortion3", "distortion4"
         ]
+        # variables = ["fy", "cy"]
+        # variables = ["fy", "distortion1"]
+        # variables = ["fy", "cy", "skip", "distortion4"]
+        # variables = ["fx", "fy", "cy", "distortion0"]
         height = int(numpy.ceil(len(variables) / 2))
         figure, axes = pyplot.subplots(height, 2, figsize=(14, 10))
         for i, variable in enumerate(variables):
-            axis = axes[i % height, i // height]
+            if len(axes.shape) == 2:
+                axis = axes[i % height, i // height]
+                axes[-1, 0].set_xlabel("Number of randomly sampled images")
+                axes[-1, 1].set_xlabel("Number of randomly sampled images")
+            else:
+                axis = axes[i]
+                axes[0].set_xlabel("Number of randomly sampled images")
+                axes[1].set_xlabel("Number of randomly sampled images")
+
             if variable == "skip":
                 axis.legend(*zip(*labels))
                 continue
@@ -97,10 +115,13 @@ def variablity_vs_samples(all_pickles, figuredir):
                 color = violin["bodies"][0].get_facecolor().flatten()
                 labels.append((patches.Patch(color=color), label))
 
-            axis.set_ylabel(variable)
             samples = numpy.array(sorted(values.keys()))
+            axis.set_ylabel(variable)
+            axis.set_xticks(samples)
+
+            radius = len(sharpness_options) // 2
             for sharpness, offset in zip(sorted(sharpness_options),
-                                         [-1.25, 0, 1.25]):
+                                         numpy.arange(-radius, radius+1) * 1.25):
                 chosen_samples = []
                 dataset = []
                 for sample in samples:
@@ -115,14 +136,16 @@ def variablity_vs_samples(all_pickles, figuredir):
                 add_label(
                     axis.violinplot(dataset=dataset,
                                     positions=chosen_samples,
-                                    widths=1.5),
-                    f"{sharpness:.2f}",
+                                    widths=2.5-(1.0*radius),
+                                    showextrema=not suppress_outliers),
+                    f"Drop blurriest {sharpness * 100:.0f}%",
                 )
 
-        axes[0, -1].set_xlabel("Number of randomly sampled images")
-        axes[1, -1].set_xlabel("Number of randomly sampled images")
         figure.suptitle(f"Variability for {id_name}")
-        pyplot.savefig(figuredir.joinpath(f"variability_{id_name.replace('/', '_')}.png"))
+        if show_plot:
+            pyplot.show()
+        else:
+            pyplot.savefig(figuredir.joinpath(f"variability_{id_name.replace('/', '_')}.png"))
 
 
 if __name__ == "__main__":
@@ -140,7 +163,32 @@ if __name__ == "__main__":
         type=Path,
         help="Directory where created figures should be saved",
     )
+    parser.add_argument(
+        "-o",
+        "--suppress-outliers",
+        action="store_true",
+        help="Plot violin plots without outliers",
+    )
+    parser.add_argument(
+        "-p",
+        "--show-plot",
+        action="store_true",
+        help="Show plots to the user instead of saving the figure (blocking)",
+    )
+    parser.add_argument(
+        "-s",
+        "--specific-sharpness",
+        type=float,
+        default=None,
+        help="Limit plot to a specific sharpness",
+    )
     args = parser.parse_args()
     all_pickles = glob(str(args.datadir.joinpath("**/randomrun*pickle")),
                        recursive=True)
-    variablity_vs_samples(all_pickles, args.figuredir)
+    variablity_vs_samples(
+        all_pickles=all_pickles,
+        figuredir=args.figuredir,
+        suppress_outliers=args.suppress_outliers,
+        show_plot=args.show_plot,
+        specific_sharpness=args.specific_sharpness,
+    )
