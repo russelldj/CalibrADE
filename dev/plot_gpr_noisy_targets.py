@@ -81,7 +81,7 @@ plt.legend(loc="upper left")
 
 # ----------------------------------------------------------------------
 # now the noisy case
-X = np.linspace(0.1, 9.9, 20)
+X = np.linspace(0.1, 9.9, 8)
 X = np.atleast_2d(X).T
 
 # Observations and noise
