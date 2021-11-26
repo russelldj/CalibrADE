@@ -56,6 +56,10 @@ def optimize(
 ):
     cached_images = {}
     test_errs = []
+
+    # Only use training images for training
+    img_paths = img_paths[global_train_ids]
+
     bounds = [(0, 1)] * img_paths.shape[0]
 
     def compute_fitness(x):
@@ -85,6 +89,7 @@ def optimize(
     top_inds = sorted_inds[-train_subset_num:]
     train_ids = np.zeros(solution.shape, dtype=bool)
     train_ids[top_inds] = True
+    # Rerun calibration with chosen inds
     calibrated_params = calibrate(
         img_paths, train_ids, cached_images, num_grid_corners, square_size=square_size,
     )
@@ -107,6 +112,11 @@ def optimize(
     if vis_hist:
         plt.hist(test_errs)
         plt.show()
+
+    plt.scatter(np.arange(len(test_errs)), test_errs)
+    plt.ylabel("Objective function value")
+    plt.xlabel("Function evaluation")
+    plt.show()
 
     return calibrated_params, train_ids
 
