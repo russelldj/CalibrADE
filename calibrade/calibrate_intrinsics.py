@@ -21,6 +21,7 @@ from util import get_cached_corners, read_data, timestamp
 CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 # Visualization interval in seconds
 PAUSE_INTERVAL = 2
+CORNER_POINT_VIS_SIZE = 0.5
 logger = logging.getLogger(__name__)
 
 NUM_GRID_CORNERS = (7, 9)
@@ -92,19 +93,29 @@ def calibrate_images(
 
     # Calibration
     # TODO determine the convention for the rotation vectors
-    _, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
-        objpoints, imgpoints, gray.shape[::-1], None, None
-    )
-    calibration_params = {
-        "mtx": mtx,
-        "dist": dist,
-        "rvecs": rvecs,
-        "tvecs": tvecs,
-        "objpoints": objpoints,
-        "imgpoints": imgpoints,
-        "num_grid_corners": num_grid_corners,
-        "square_size": square_size,
-    }
+    try:
+        _, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+            objpoints, imgpoints, gray.shape[::-1], None, None
+        )
+        calibration_params = {
+            "mtx": mtx,
+            "dist": dist,
+            "rvecs": rvecs,
+            "tvecs": tvecs,
+            "objpoints": objpoints,
+            "imgpoints": imgpoints,
+            "num_grid_corners": num_grid_corners,
+            "square_size": square_size,
+        }
+    except AssertionError:
+        calibration_params = {
+            "objpoints": objpoints,
+            "imgpoints": imgpoints,
+            "num_grid_corners": num_grid_corners,
+            "square_size": square_size,
+        }
+        print("Not enough images")
+
     return calibration_params
 
 
@@ -114,7 +125,7 @@ def calibrate(image_names, train_ids, cached_images, num_grid_corners, **kwargs)
     """
     valid_images = image_names[train_ids]
     calib_results = calibrate_images(
-        valid_images, cached_images, num_grid_corners=num_grid_corners, **kwargs
+        valid_images, cached_images, num_grid_corners=num_grid_corners, **kwargs,
     )
     return calib_results
 
@@ -147,6 +158,26 @@ def calculate_reprojection_error(
     for i in range(len(objpoints)):
         imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
         error = np.linalg.norm(imgpoints[i] - imgpoints2) / len(imgpoints2)
+        if "image_paths" in kwargs:
+            image_file = kwargs["image_paths"][kwargs["test_ids"]][i]
+            img = read_cached_image(image_file, kwargs["cached_images"])
+            plt.scatter(
+                imgpoints[i][..., 0],
+                imgpoints[i][..., 1],
+                s=CORNER_POINT_VIS_SIZE,
+                c="r",
+                label="Detected",
+            )
+            plt.scatter(
+                imgpoints2[..., 0],
+                imgpoints2[..., 1],
+                s=CORNER_POINT_VIS_SIZE,
+                c="c",
+                label="Projected",
+            )
+            plt.legend()
+            plt.imshow(img)
+            plt.show()
         total_error += error
     try:
         average_error = total_error / len(objpoints)
@@ -155,7 +186,6 @@ def calculate_reprojection_error(
     return average_error
 
 
-# def evaluate_reprojection(image_paths, test_ids, params, cached_images):
 def compute_extrinsics(image_paths, test_ids, params, cached_images):
     valid_images = image_paths[test_ids]
 
@@ -191,19 +221,38 @@ def compute_extrinsics(image_paths, test_ids, params, cached_images):
     return rvecs, tvecs, successful_objpoints, successful_imgpoints
 
 
-def evaluate_reprojection(image_paths, test_ids, params, cached_images):
-
-    mtx = params["mtx"]
-    dist = params["dist"]
+def evaluate_reprojection(
+    image_paths, test_ids, params, cached_images, vis_images=False
+):
+    try:
+        mtx = params["mtx"]
+        dist = params["dist"]
+    except KeyError:
+        # This means that the relevant parameters weren't computed
+        return np.inf
 
     rvecs, tvecs, successful_objpoints, successful_imgpoints = compute_extrinsics(
         image_paths, test_ids, params, cached_images
     )
     # Consider renaming mtx and dist
     # TODO, also report the number that were correctly triangulated
-    error = calculate_reprojection_error(
-        successful_objpoints, successful_imgpoints, rvecs, tvecs, mtx, dist
-    )
+    if vis_images:
+        error = calculate_reprojection_error(
+            successful_objpoints,
+            successful_imgpoints,
+            rvecs,
+            tvecs,
+            mtx,
+            dist,
+            image_paths=image_paths,
+            cached_images=cached_images,
+            test_ids=test_ids,
+        )
+    else:
+        error = calculate_reprojection_error(
+            successful_objpoints, successful_imgpoints, rvecs, tvecs, mtx, dist
+        )
+
     return error
 
 
