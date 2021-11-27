@@ -92,8 +92,7 @@ def calibrate_images(
             plt.pause(PAUSE_INTERVAL)
 
     # Calibration
-    # TODO determine the convention for the rotation vectors
-    try:
+    if len(imgpoints) >= 2:
         _, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
             objpoints, imgpoints, gray.shape[::-1], None, None
         )
@@ -107,14 +106,16 @@ def calibrate_images(
             "num_grid_corners": num_grid_corners,
             "square_size": square_size,
         }
-    except AssertionError:
+    else:
+        print(
+            f"Skipping intrinsic calibration because number of images is {len(imgpoints)}"
+        )
         calibration_params = {
             "objpoints": objpoints,
             "imgpoints": imgpoints,
             "num_grid_corners": num_grid_corners,
             "square_size": square_size,
         }
-        print("Not enough images")
 
     return calibration_params
 

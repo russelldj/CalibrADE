@@ -53,6 +53,7 @@ def optimize_GA(
     vis_extrinsics=False,
     num_grid_corners=(7, 9),
     square_size=SQUARE_SIZE,
+    **kwargs,
 ):
     cached_images = {}
     test_errs = []
@@ -118,10 +119,11 @@ def optimize_GA(
         plt.hist(test_errs)
         plt.show()
 
+    if "savepath" in kwargs and kwargs["savepath"] is not None:
         plt.scatter(np.arange(len(test_errs)), test_errs)
         plt.ylabel("Objective function value")
         plt.xlabel("Function evaluation")
-        plt.show()
+        plt.savefig(kwargs["savepath"])
 
     return calibrated_params, train_ids
 
@@ -136,6 +138,7 @@ def optimize_random(
     vis_extrinsics=False,
     num_grid_corners=(7, 9),
     square_size=SQUARE_SIZE,
+    **kwargs,
 ):
 
     cached_images = {}
@@ -259,7 +262,7 @@ def args_parse():
     parser.add_argument(
         "-m",
         "--max-iter",
-        default=100,
+        default=10,
         type=int,
         help="max number of optimization iterations",
     )
@@ -277,6 +280,9 @@ def args_parse():
         default=SQUARE_SIZE,
         type=float,
         help="The size of a single calibration square in meters",
+    )
+    parser.add_argument(
+        "--savepath", help="Where to save the visualization result",
     )
     args = parser.parse_args()
     assert args.datadir.is_dir()
