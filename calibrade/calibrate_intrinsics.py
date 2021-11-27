@@ -21,7 +21,7 @@ from util import get_cached_corners, read_data, timestamp
 CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 # Visualization interval in seconds
 PAUSE_INTERVAL = 2
-CORNER_POINT_VIS_SIZE = 0.5
+CORNER_POINT_VIS_SIZE = 10
 logger = logging.getLogger(__name__)
 
 NUM_GRID_CORNERS = (7, 9)
@@ -164,15 +164,21 @@ def calculate_reprojection_error(
             plt.scatter(
                 imgpoints[i][..., 0],
                 imgpoints[i][..., 1],
-                s=CORNER_POINT_VIS_SIZE,
-                c="r",
+                s=CORNER_POINT_VIS_SIZE * 4,
+                linewidths=1,
+                c="g",
+                marker="X",
                 label="Detected",
             )
-            plt.scatter(
+            plt.plot(
                 imgpoints2[..., 0],
                 imgpoints2[..., 1],
-                s=CORNER_POINT_VIS_SIZE,
-                c="c",
+                markersize=CORNER_POINT_VIS_SIZE,
+                linestyle="none",
+                markeredgewidth=1.5,
+                marker="o",
+                markerfacecolor="none",
+                markeredgecolor="fuchsia",
                 label="Projected",
             )
             plt.legend()
