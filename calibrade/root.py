@@ -6,6 +6,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
+import scipy.optimize
+
 
 from calibrate_intrinsics import calibrate, compute_extrinsics, evaluate_reprojection
 from constants import SQUARE_SIZE
@@ -41,7 +43,90 @@ def visualize_set(img_paths, ids, tag):  # tag decides if its train or test fold
     print("tbd")
 
 
-def optimize(
+def optimize_GA(
+    img_paths,
+    test_ids,
+    global_train_ids,
+    max_iter,
+    train_subset_num,
+    vis_hist=False,
+    vis_extrinsics=False,
+    num_grid_corners=(7, 9),
+    square_size=SQUARE_SIZE,
+):
+    cached_images = {}
+    test_errs = []
+
+    # Only use training images for training
+    train_img_paths = img_paths[global_train_ids]
+
+    # Constrain all decision variables to be in the range (0, 1)
+    bounds = [(0, 1)] * train_img_paths.shape[0]
+
+    # Takes a vector of decision variables represenenting which camera to select and returns the
+    # test set error. Note that this takes values from the local scope but these are not optimized over.
+    def compute_fitness(x):
+        sorted_inds = np.argsort(x)
+        top_inds = sorted_inds[-train_subset_num:]
+        train_ids = np.zeros(x.shape, dtype=bool)
+        train_ids[top_inds] = True
+        calibrated_params = calibrate(
+            train_img_paths,
+            train_ids,
+            cached_images,
+            num_grid_corners,
+            square_size=square_size,
+        )
+        test_err = evaluate_reprojection(
+            img_paths, test_ids, calibrated_params, cached_images
+        )
+        test_errs.append(test_err)
+        return test_err
+
+    # Run the genetic algorithm
+    res = scipy.optimize.differential_evolution(
+        compute_fitness, bounds=bounds, disp=True, maxiter=max_iter, popsize=1,
+    )
+
+    solution = res.x
+    # Recompute the calibration solution since it is not directly reported
+    sorted_inds = np.argsort(solution)
+    top_inds = sorted_inds[-train_subset_num:]
+    train_ids = np.zeros(solution.shape, dtype=bool)
+    train_ids[top_inds] = True
+    # Rerun calibration with chosen inds
+    calibrated_params = calibrate(
+        img_paths, train_ids, cached_images, num_grid_corners, square_size=square_size,
+    )
+
+    if vis_extrinsics:
+        rvecs = calibrated_params["rvecs"]
+        tvecs = calibrated_params["tvecs"]
+
+        visualize(
+            rvecs,
+            tvecs,
+            calibrated_params["mtx"],
+            board_height=num_grid_corners[0],
+            board_width=num_grid_corners[1],
+            pattern_centric=False,
+            square_size=square_size,
+            image_shape=(1920, 1080),
+        )
+
+    if vis_hist:
+        plt.hist(test_errs)
+        plt.show()
+
+        plt.scatter(np.arange(len(test_errs)), test_errs)
+        plt.ylabel("Objective function value")
+        plt.xlabel("Function evaluation")
+        plt.show()
+
+    return calibrated_params, train_ids
+
+
+def optimize_random(
     img_paths,
     test_ids,
     global_train_ids,
@@ -95,6 +180,9 @@ def optimize(
     return cam_params[min_idx], train_subset_ids_list[min_idx]
 
 
+OPTIMIZATION_TYPES = {"GA": optimize_GA, "random": optimize_random}
+
+
 def root(args):
     print("Reading data... ", end="")
     img_paths = read_data(args.datadir)
@@ -109,7 +197,8 @@ def root(args):
     global_train_ids = np.invert(test_ids)
 
     print("Calling calibration on a series of images")
-    cam_params, _ = optimize(
+    optimization_func = OPTIMIZATION_TYPES[args.optimization_type]
+    cam_params, _ = optimization_func(
         img_paths=img_paths,
         test_ids=test_ids,
         global_train_ids=global_train_ids,
@@ -125,8 +214,7 @@ def root(args):
 def args_parse():
 
     parser = argparse.ArgumentParser(
-        prog="root",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        prog="root", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("datadir", type=Path, help="directory containing all images")
     parser.add_argument(
@@ -135,6 +223,13 @@ def args_parse():
         default=50,
         type=float,
         help="what percentage of pruned set should be selected as initial test set",
+    )
+    parser.add_argument(
+        "-o",
+        "--optimization-type",
+        default="random",
+        choices=OPTIMIZATION_TYPES.keys(),
+        help="Which type of optimization routine to use",
     )
     parser.add_argument(
         "-d",
@@ -157,7 +252,7 @@ def args_parse():
     parser.add_argument(
         "-r",
         "--train-subset-num",
-        default=25,
+        default=10,
         type=int,
         help="number of samples from global train set to be sampled for an optimization iteration",
     )
