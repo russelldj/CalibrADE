@@ -43,7 +43,7 @@ def visualize_set(img_paths, ids, tag):  # tag decides if its train or test fold
     print("tbd")
 
 
-def optimize(
+def optimize_GA(
     img_paths,
     test_ids,
     global_train_ids,
@@ -121,6 +121,63 @@ def optimize(
     return calibrated_params, train_ids
 
 
+def optimize_random(
+    img_paths,
+    test_ids,
+    global_train_ids,
+    max_iter,
+    train_subset_num,
+    vis_hist=False,
+    vis_extrinsics=False,
+    num_grid_corners=(7, 9),
+    square_size=SQUARE_SIZE,
+):
+
+    cached_images = {}
+    test_err = []
+    cam_params = []
+    train_subset_ids_list = []
+    for i in tqdm(range(0, max_iter), desc="Main optimization loop"):
+        train_ids = select_subset_num(train_subset_num, global_train_ids)
+        train_subset_ids_list.append(train_ids)
+        cam_params.append(
+            calibrate(
+                img_paths,
+                train_ids,
+                cached_images,
+                num_grid_corners,
+                square_size=square_size,
+            )
+        )
+        test_err.append(
+            evaluate_reprojection(img_paths, test_ids, cam_params[-1], cached_images)
+        )
+        if vis_extrinsics:
+            rvecs = cam_params[-1]["rvecs"]
+            tvecs = cam_params[-1]["tvecs"]
+
+            visualize(
+                rvecs,
+                tvecs,
+                cam_params[-1]["mtx"],
+                board_height=num_grid_corners[0],
+                board_width=num_grid_corners[1],
+                pattern_centric=False,
+                square_size=square_size,
+                image_shape=(1920, 1080),
+            )
+
+    if vis_hist:
+        plt.hist(test_err)
+        plt.show()
+
+    min_idx = np.argmin(test_err)
+    return cam_params[min_idx], train_subset_ids_list[min_idx]
+
+
+OPTIMIZATION_TYPES = {"GA": optimize_GA, "random": optimize_random}
+
+
 def root(args):
     print("Reading data... ", end="")
     img_paths = read_data(args.datadir)
@@ -135,7 +192,8 @@ def root(args):
     global_train_ids = np.invert(test_ids)
 
     print("Calling calibration on a series of images")
-    cam_params, _ = optimize(
+    optimization_func = OPTIMIZATION_TYPES[args.optimization_type]
+    cam_params, _ = optimization_func(
         img_paths=img_paths,
         test_ids=test_ids,
         global_train_ids=global_train_ids,
@@ -160,6 +218,12 @@ def args_parse():
         default=50,
         type=float,
         help="what percentage of pruned set should be selected as initial test set",
+    )
+    parser.add_argument(
+        "--optimization_type",
+        default="random",
+        choices=OPTIMIZATION_TYPES.keys(),
+        help="Which type of optimization routine to use",
     )
     parser.add_argument(
         "-d",
