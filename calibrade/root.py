@@ -7,7 +7,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from calibrate_intrinsics import calibrate, compute_extrinsics, evaluate_reprojection
+ERROR_VIS_SCALE = 5
+
+from calibrate_intrinsics import (
+    calibrate,
+    compute_extrinsics,
+    evaluate_reprojection,
+    project_points,
+)
 from constants import SQUARE_SIZE
 from prune import prune
 from util import read_data
@@ -52,11 +59,11 @@ def optimize(
     num_grid_corners=(7, 9),
     square_size=SQUARE_SIZE,
 ):
-
     cached_images = {}
     test_err = []
     cam_params = []
     train_subset_ids_list = []
+
     for i in tqdm(range(0, max_iter), desc="Main optimization loop"):
         train_ids = select_subset_num(train_subset_num, global_train_ids)
         train_subset_ids_list.append(train_ids)
@@ -95,6 +102,84 @@ def optimize(
     return cam_params[min_idx], train_subset_ids_list[min_idx]
 
 
+def optimize_GP(
+    img_paths,
+    test_ids,
+    global_train_ids,
+    max_iter,
+    train_subset_num,
+    vis_hist=False,
+    vis_extrinsics=False,
+    num_grid_corners=(7, 9),
+    square_size=SQUARE_SIZE,
+):
+    cached_images = {}
+    test_err = []
+    cam_params = []
+    train_subset_ids_list = []
+
+    # Select a subset randomly
+    # Then run calibration on that subset and get an predicted result
+    # Obtain the reprojection error for each point
+    # Fit a GP to this reprojection error
+    # In the simplest case, you can fit the mean function to the error function
+    # Find the camera that maximizes the expected error over these points
+    # Add that to calibration and repeat
+
+    for i in tqdm(range(0, max_iter), desc="Main optimization loop"):
+        train_ids = select_subset_num(train_subset_num, global_train_ids)
+        train_subset_ids_list.append(train_ids)
+        params = calibrate(
+            img_paths,
+            train_ids,
+            cached_images,
+            num_grid_corners,
+            square_size=square_size,
+        )
+        projected_pts = project_points(
+            params["objpoints"],
+            params["rvecs"],
+            params["tvecs"],
+            params["mtx"],
+            params["dist"],
+        )
+        detected_pts = params["imgpoints"]
+        detected_pts, projected_pts = [
+            np.squeeze(x) for x in (detected_pts, projected_pts)
+        ]
+        diffs = [p - d for p, d in zip(detected_pts, projected_pts)]
+
+        errors = [np.linalg.norm(d, axis=1) for d in diffs]
+        for i, (d, e) in enumerate(zip(detected_pts, errors)):
+            plt.scatter(d[:, 0], d[:, 1], s=e * ERROR_VIS_SCALE, label=f"Image {i}")
+        plt.legend()
+        plt.show()
+        test_err.append(
+            evaluate_reprojection(img_paths, test_ids, params, cached_images)
+        )
+        if vis_extrinsics:
+            rvecs = cam_params[-1]["rvecs"]
+            tvecs = cam_params[-1]["tvecs"]
+
+            visualize(
+                rvecs,
+                tvecs,
+                params["mtx"],
+                board_height=num_grid_corners[0],
+                board_width=num_grid_corners[1],
+                pattern_centric=False,
+                square_size=square_size,
+                image_shape=(1920, 1080),
+            )
+
+    if vis_hist:
+        plt.hist(test_err)
+        plt.show()
+
+    min_idx = np.argmin(test_err)
+    return cam_params[min_idx], train_subset_ids_list[min_idx]
+
+
 def root(args):
     print("Reading data... ", end="")
     img_paths = read_data(args.datadir)
@@ -109,7 +194,7 @@ def root(args):
     global_train_ids = np.invert(test_ids)
 
     print("Calling calibration on a series of images")
-    cam_params, _ = optimize(
+    cam_params, _ = optimize_GP(
         img_paths=img_paths,
         test_ids=test_ids,
         global_train_ids=global_train_ids,
@@ -125,8 +210,7 @@ def root(args):
 def args_parse():
 
     parser = argparse.ArgumentParser(
-        prog="root",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        prog="root", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("datadir", type=Path, help="directory containing all images")
     parser.add_argument(

@@ -140,14 +140,24 @@ def visualize_undistortion(image_path, mtx, dist, vis_path=None):
         cv2.imwrite(str(vis_path), np.hstack((img, dst)))
 
 
+def project_points(objpoints, rvecs, tvecs, mtx, dist):
+    projected_pts = []
+    for i in range(len(objpoints)):
+        projected, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
+        projected_pts.append(projected)
+    return projected_pts
+
+
 def calculate_reprojection_error(
     objpoints, imgpoints, rvecs, tvecs, mtx, dist, **kwargs
 ):
     total_error = 0
-    for i in range(len(objpoints)):
-        imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
-        error = np.linalg.norm(imgpoints[i] - imgpoints2) / len(imgpoints2)
+    projected_points = project_points(objpoints, rvecs, tvecs, mtx, dist)
+    for i in range(len(projected_points)):
+        # This is different than before, now it's the average pixel error
+        error = np.mean(np.linalg.norm(imgpoints[i] - projected_points[i], axis=1))
         total_error += error
+
     try:
         average_error = total_error / len(objpoints)
     except ZeroDivisionError:
@@ -155,7 +165,6 @@ def calculate_reprojection_error(
     return average_error
 
 
-# def evaluate_reprojection(image_paths, test_ids, params, cached_images):
 def compute_extrinsics(image_paths, test_ids, params, cached_images):
     valid_images = image_paths[test_ids]
 
