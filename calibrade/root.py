@@ -58,17 +58,20 @@ def optimize_GA(
     test_errs = []
 
     # Only use training images for training
-    img_paths = img_paths[global_train_ids]
+    train_img_paths = img_paths[global_train_ids]
 
-    bounds = [(0, 1)] * img_paths.shape[0]
+    # Constrain all decision variables to be in the range (0, 1)
+    bounds = [(0, 1)] * train_img_paths.shape[0]
 
+    # Takes a vector of decision variables represenenting which camera to select and returns the
+    # test set error. Note that this takes values from the local scope but these are not optimized over.
     def compute_fitness(x):
         sorted_inds = np.argsort(x)
         top_inds = sorted_inds[-train_subset_num:]
         train_ids = np.zeros(x.shape, dtype=bool)
         train_ids[top_inds] = True
         calibrated_params = calibrate(
-            img_paths,
+            train_img_paths,
             train_ids,
             cached_images,
             num_grid_corners,
@@ -80,11 +83,13 @@ def optimize_GA(
         test_errs.append(test_err)
         return test_err
 
+    # Run the genetic algorithm
     res = scipy.optimize.differential_evolution(
         compute_fitness, bounds=bounds, disp=True, maxiter=max_iter, popsize=1,
     )
 
     solution = res.x
+    # Recompute the calibration solution since it is not directly reported
     sorted_inds = np.argsort(solution)
     top_inds = sorted_inds[-train_subset_num:]
     train_ids = np.zeros(solution.shape, dtype=bool)
@@ -113,10 +118,10 @@ def optimize_GA(
         plt.hist(test_errs)
         plt.show()
 
-    plt.scatter(np.arange(len(test_errs)), test_errs)
-    plt.ylabel("Objective function value")
-    plt.xlabel("Function evaluation")
-    plt.show()
+        plt.scatter(np.arange(len(test_errs)), test_errs)
+        plt.ylabel("Objective function value")
+        plt.xlabel("Function evaluation")
+        plt.show()
 
     return calibrated_params, train_ids
 
@@ -220,7 +225,8 @@ def args_parse():
         help="what percentage of pruned set should be selected as initial test set",
     )
     parser.add_argument(
-        "--optimization_type",
+        "-o",
+        "--optimization-type",
         default="random",
         choices=OPTIMIZATION_TYPES.keys(),
         help="Which type of optimization routine to use",
