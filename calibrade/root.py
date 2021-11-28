@@ -64,6 +64,7 @@ def optimize_GA(
     vis_extrinsics=False,
     num_grid_corners=(7, 9),
     square_size=SQUARE_SIZE,
+    **kwargs,
 ):
     cached_images = {}
     test_errs = []
@@ -215,6 +216,7 @@ def optimize_GP(
     vis_extrinsics=False,
     num_grid_corners=(7, 9),
     square_size=SQUARE_SIZE,
+    **kwargs,
 ):
     cached_images = {}
     test_err = []
@@ -320,7 +322,7 @@ def optimize_GP(
     return cam_params[min_idx], train_subset_ids_list[min_idx]
 
 
-OPTIMIZATION_TYPES = {"GA": optimize_GA, "random": optimize_random}
+OPTIMIZATION_TYPES = {"GA": optimize_GA, "GP": optimize_GP, "random": optimize_random}
 
 
 def root(args):
@@ -348,6 +350,7 @@ def root(args):
         vis_extrinsics=args.vis_extrinsics,
         num_grid_corners=args.num_grid_corners,
         square_size=args.square_size,
+        savepath=args.savepath,
     )
 
 
@@ -417,6 +420,9 @@ def args_parse():
         default=SQUARE_SIZE,
         type=float,
         help="The size of a single calibration square in meters",
+    )
+    parser.add_argument(
+        "--savepath", help="Where to save the output figure",
     )
     args = parser.parse_args()
     assert args.datadir.is_dir()
