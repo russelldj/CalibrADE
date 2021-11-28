@@ -1,0 +1,5 @@
+outs:
+- md5: 42ee0c3fd3a61ba7db4f9399bee1546a
+  size: 1411237
+  path: image-000381.png
+  isexec: true

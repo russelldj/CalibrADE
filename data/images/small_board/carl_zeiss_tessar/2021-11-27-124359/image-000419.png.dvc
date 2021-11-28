@@ -1,0 +1,5 @@
+outs:
+- md5: 3a57cdb2c87097646fa5bb8744c4c08d
+  size: 1218473
+  path: image-000419.png
+  isexec: true
