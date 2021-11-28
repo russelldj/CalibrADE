@@ -151,6 +151,14 @@ def visualize_undistortion(image_path, mtx, dist, vis_path=None):
         cv2.imwrite(str(vis_path), np.hstack((img, dst)))
 
 
+def project_points(objpoints, rvecs, tvecs, mtx, dist):
+    projected_pts = []
+    for i in range(len(objpoints)):
+        projected, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
+        projected_pts.append(projected)
+    return projected_pts
+
+
 def calculate_reprojection_error(
     objpoints, imgpoints, rvecs, tvecs, mtx, dist, **kwargs
 ):
@@ -185,6 +193,7 @@ def calculate_reprojection_error(
             plt.imshow(img)
             plt.show()
         total_error += error
+
     try:
         average_error = total_error / len(objpoints)
     except ZeroDivisionError:
