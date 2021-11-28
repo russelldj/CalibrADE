@@ -3,6 +3,7 @@ import pdb
 from ast import parse
 from pathlib import Path
 
+import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
@@ -96,7 +97,11 @@ def optimize_GA(
     train_ids[top_inds] = True
     # Rerun calibration with chosen inds
     calibrated_params = calibrate(
-        img_paths, train_ids, cached_images, num_grid_corners, square_size=square_size,
+        train_img_paths,
+        train_ids,
+        cached_images,
+        num_grid_corners,
+        square_size=square_size,
     )
 
     if vis_extrinsics:
@@ -136,6 +141,7 @@ def optimize_random(
     vis_extrinsics=False,
     num_grid_corners=(7, 9),
     square_size=SQUARE_SIZE,
+    **kwargs,
 ):
 
     cached_images = {}
@@ -174,7 +180,15 @@ def optimize_random(
 
     if vis_hist:
         plt.hist(test_err)
-        plt.show()
+        plt.xlabel("Reprojection error")
+        plt.ylabel("Frequency")
+        if "savepath" in kwargs and kwargs["savepath"] is not None:
+            plt.savefig(kwargs["savepath"])
+            errors_pickle = Path(kwargs["savepath"]).with_suffix("pickle")
+            with open(errors_pickle, "wb") as outfile_h:
+                pickle.dump(test_err, outfile_h)
+        else:
+            plt.show()
 
     min_idx = np.argmin(test_err)
     return cam_params[min_idx], train_subset_ids_list[min_idx]
