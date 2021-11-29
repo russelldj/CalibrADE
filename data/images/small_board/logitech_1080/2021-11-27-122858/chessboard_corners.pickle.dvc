@@ -1,0 +1,5 @@
+outs:
+- md5: bce645d2221b9f1f13f5f8f30e1ccbb2
+  size: 49949
+  path: chessboard_corners.pickle
+  isexec: true
