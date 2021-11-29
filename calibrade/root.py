@@ -70,7 +70,7 @@ def optimize_GA(
     test_errs = []
 
     NUM_TRAIN = 25
-    if True:
+    if False:
         # Only use training images for training
         train_ids = select_subset_num(NUM_TRAIN, global_train_ids)
         # Downsample to 25
@@ -146,10 +146,21 @@ def optimize_GA(
         plt.hist(test_errs)
         plt.show()
 
-    plt.scatter(np.arange(len(test_errs)), test_errs)
-    plt.ylabel("Objective function value")
+    min_reproj = np.min(test_errs)
+    print(f"Minimum reprojection {min_reproj}")
+    plt.hlines(
+        min_reproj,
+        xmin=0,
+        xmax=300,
+        label="Minimum value",
+        linestyles="dashed",
+        colors=["r"],
+    )
+    plt.scatter(np.arange(len(test_errs)), test_errs, label="Single subset")
+    plt.ylabel("Mean reprojection error (pixels)")
     plt.xlabel("Number of function evaluations")
-    plt.ylim(0, min(0.5, np.max(test_errs)))
+    plt.ylim(0, min(3, np.max(test_errs)))
+    plt.legend()
     # xticks = np.arange(0, NUM_TRAIN * max_iter, NUM_TRAIN)
     # xticks = np.concatenate((xticks, [len(test_errs)]))
     # xtick_labels = np.arange(max_iter) + 1
@@ -185,6 +196,8 @@ def optimize_random(
     test_err = []
     cam_params = []
     train_subset_ids_list = []
+    # HACK, remove
+    global_train_ids = select_subset_num(25, global_train_ids)
 
     for i in tqdm(range(0, max_iter), desc="Main optimization loop"):
         train_ids = select_subset_num(train_subset_num, global_train_ids)
@@ -216,20 +229,33 @@ def optimize_random(
                 image_shape=(1920, 1080),
             )
 
-    if vis_hist:
-        plt.hist(test_err)
-        plt.xlabel("Reprojection error")
-        plt.ylabel("Frequency")
+    plt.scatter(np.arange(len(test_err)), test_err, label="Single subset")
+
+    min_reproj = np.min(test_err)
+    plt.hlines(
+        min_reproj,
+        xmin=0,
+        xmax=300,
+        label="Minimum value",
+        linestyles="dashed",
+        colors=["r"],
+    )
+    plt.xlabel("Randomly-selected subsets")
+    plt.ylabel("Mean reprojection error (pixels)")
+    plt.ylim(0, 3)
+    plt.title("Random subset selection")
+    plt.legend()
 
     if "savepath" in kwargs and kwargs["savepath"] is not None:
         plt.savefig(kwargs["savepath"])
-        errors_pickle = Path(kwargs["savepath"]).with_suffix("pickle")
+        errors_pickle = Path(kwargs["savepath"]).with_suffix(".pickle")
         with open(errors_pickle, "wb") as outfile_h:
             pickle.dump(test_err, outfile_h)
     else:
         plt.show()
 
     min_idx = np.argmin(test_err)
+    print(min(test_err))
     return cam_params[min_idx], train_subset_ids_list[min_idx]
 
 
@@ -246,6 +272,7 @@ def optimize_GP(
     image_shape=(1920, 1080),
     **kwargs,
 ):
+
     cached_images = {}
     test_err = []
     cam_params = []
@@ -269,13 +296,16 @@ def optimize_GP(
             num_grid_corners,
             square_size=square_size,
         )
-        projected_pts = project_points(
-            params["objpoints"],
-            params["rvecs"],
-            params["tvecs"],
-            params["mtx"],
-            params["dist"],
-        )
+        try:
+            projected_pts = project_points(
+                params["objpoints"],
+                params["rvecs"],
+                params["tvecs"],
+                params["mtx"],
+                params["dist"],
+            )
+        except KeyError:
+            continue
         detected_pts = params["imgpoints"]
         detected_pts, projected_pts = [
             np.squeeze(x) for x in (detected_pts, projected_pts)
@@ -283,12 +313,18 @@ def optimize_GP(
         diffs = [p - d for p, d in zip(detected_pts, projected_pts)]
 
         errors = [np.linalg.norm(d, axis=1) for d in diffs]
-        for i, (d, e) in enumerate(zip(detected_pts, errors)):
-            plt.scatter(d[:, 0], d[:, 1], s=e * ERROR_VIS_SCALE, label=f"Image {i}")
-
+        errors = np.concatenate(errors, axis=0)
         detected_pts = np.vstack(detected_pts)
-        errors = np.concatenate(errors)
-
+        # for i, (d, e) in enumerate(zip(detected_pts, errors)):
+        #    plt.scatter(d[:, 0], d[:, 1], s=e * ERROR_VIS_SCALE, label=f"Image {i}")
+        plt.figure(figsize=(20, 13))
+        plt.scatter(
+            detected_pts[:, 0],
+            detected_pts[:, 1],
+            s=errors * ERROR_VIS_SCALE,
+            label=f"Detected points. Size represents reprojection error.",
+            c="w",
+        )
         # Instantiate a Gaussian Process model
         # kernel = C(1.0, (1e-3, 1e3)) * RBF(10, (4e1, 1e3))
 
@@ -308,25 +344,28 @@ def optimize_GP(
         sample_xs = sample_xs.ravel()
         sample_ys = sample_ys.ravel()
         sample_points = np.stack((sample_xs, sample_ys), axis=1)
-        print(sample_points.shape)
-        breakpoint()
-        pred_error, pred_error_sigma = gp.predict(sample_points, return_std=True)
-        print("predicted GP")
+
+        CHUNK_SIZE = 20000
+        pred_errors = []
+        pred_error_sigmas = []
+        for j in range(0, len(sample_points), CHUNK_SIZE):
+            chunk = sample_points[j : j + CHUNK_SIZE]
+            pred_error, pred_error_sigma = gp.predict(chunk, return_std=True)
+            pred_errors.append(pred_error)
+            pred_error_sigmas.append(pred_error_sigma)
+
+        pred_error = np.concatenate(pred_errors)
+        pred_error_sigma = np.concatenate(pred_error_sigmas)
         upper_bound = pred_error + 1.96 * pred_error_sigma
         upper_bound = upper_bound.reshape(image_shape[::-1])
-        print(upper_bound.shape)
-        print("About to show")
         cb = plt.imshow(upper_bound)
-        print("Showed")
-        # cb = plt.scatter(
-        #    sample_points[:, 0],
-        #    sample_points[:, 1],
-        #    c=pred_error + 1.96 * pred_error_sigma,
-        # )
         plt.colorbar(cb)
-        plt.legend()
-        plt.title(gp.kernel_)
-        plt.show()
+        plt.legend(prop={"size": 12})
+        plt.title(f"Gaussian process on reprojection error", fontsize=20)
+        plt.savefig(f"vis/GP_iter_{i}.png")
+        plt.clf()
+        plt.cla()
+        plt.close()
 
         test_err.append(
             evaluate_reprojection(img_paths, test_ids, params, cached_images)

@@ -93,7 +93,7 @@ def calibrate_images(
 
     # Calibration
     # TODO determine the convention for the rotation vectors
-    try:
+    if len(imgpoints) > 1:
         _, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
             objpoints, imgpoints, gray.shape[::-1], None, None
         )
@@ -107,7 +107,7 @@ def calibrate_images(
             "num_grid_corners": num_grid_corners,
             "square_size": square_size,
         }
-    except AssertionError:
+    else:
         calibration_params = {
             "objpoints": objpoints,
             "imgpoints": imgpoints,
@@ -165,31 +165,46 @@ def calculate_reprojection_error(
     total_error = 0
     for i in range(len(objpoints)):
         imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
-        error = np.linalg.norm(imgpoints[i] - imgpoints2) / len(imgpoints2)
+        errors = np.linalg.norm(np.squeeze(imgpoints[i] - imgpoints2), axis=1)
+        error = np.mean(errors)
         if "image_paths" in kwargs:
             image_file = kwargs["image_paths"][kwargs["test_ids"]][i]
             img = read_cached_image(image_file, kwargs["cached_images"])
             plt.scatter(
                 imgpoints[i][..., 0],
                 imgpoints[i][..., 1],
-                s=CORNER_POINT_VIS_SIZE * 4,
-                linewidths=1,
-                c="g",
-                marker="X",
+                c="b",
+                s=CORNER_POINT_VIS_SIZE * 30,
                 label="Detected",
             )
-            plt.plot(
+            plt.scatter(
                 imgpoints2[..., 0],
                 imgpoints2[..., 1],
-                markersize=CORNER_POINT_VIS_SIZE,
-                linestyle="none",
-                markeredgewidth=1.5,
-                marker="o",
-                markerfacecolor="none",
-                markeredgecolor="fuchsia",
+                c="r",
+                s=CORNER_POINT_VIS_SIZE * 30,
                 label="Projected",
             )
-            plt.legend()
+            # plt.scatter(
+            #    imgpoints[i][..., 0],
+            #    imgpoints[i][..., 1],
+            #    s=CORNER_POINT_VIS_SIZE * 4,
+            #    linewidths=1,
+            #    c="g",
+            #    marker="X",
+            #    label="Detected",
+            # )
+            # plt.plot(
+            #    imgpoints2[..., 0],
+            #    imgpoints2[..., 1],
+            #    markersize=CORNER_POINT_VIS_SIZE,
+            #    linestyle="none",
+            #    markeredgewidth=1.5,
+            #    marker="o",
+            #    markerfacecolor="none",
+            #    markeredgecolor="fuchsia",
+            #    label="Projected",
+            # )
+            plt.legend(prop={"size": 15})
             plt.imshow(img)
             plt.show()
         total_error += error
