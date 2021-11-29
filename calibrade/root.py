@@ -69,21 +69,53 @@ def optimize_GA(
     cached_images = {}
     test_errs = []
 
-    # Only use training images for training
-    train_ids = select_subset_num(10, global_train_ids)
-    # Downsample to 25
-    train_img_paths = img_paths[train_ids]
+    NUM_TRAIN = 25
+    if True:
+        # Only use training images for training
+        train_ids = select_subset_num(NUM_TRAIN, global_train_ids)
+        # Downsample to 25
+        train_img_paths = img_paths[train_ids]
 
-    # Constrain all decision variables to be in the range (0, 1)
-    bounds = [(0, 1)] * train_img_paths.shape[0]
+        # Constrain all decision variables to be in the range (0, 1)
+        bounds = [(0, 1)] * train_img_paths.shape[0]
 
-    # Takes a vector of decision variables represenenting which camera to select and returns the
-    # test set error. Note that this takes values from the local scope but these are not optimized over.
-    def compute_fitness(x):
-        sorted_inds = np.argsort(x)
+        # Takes a vector of decision variables represenenting which camera to select and returns the
+        # test set error. Note that this takes values from the local scope but these are not optimized over.
+        def compute_fitness(x):
+            sorted_inds = np.argsort(x)
+            top_inds = sorted_inds[-train_subset_num:]
+            train_ids = np.zeros(x.shape, dtype=bool)
+            train_ids[top_inds] = True
+            calibrated_params = calibrate(
+                train_img_paths,
+                train_ids,
+                cached_images,
+                num_grid_corners,
+                square_size=square_size,
+            )
+            test_err = evaluate_reprojection(
+                img_paths, test_ids, calibrated_params, cached_images
+            )
+            test_errs.append(test_err)
+            return test_err
+
+        # Run the genetic algorithm
+        res = scipy.optimize.differential_evolution(
+            compute_fitness,
+            bounds=bounds,
+            disp=True,
+            maxiter=max_iter,
+            popsize=1,
+            mutation=1,
+        )
+
+        solution = res.x
+        # Recompute the calibration solution since it is not directly reported
+        sorted_inds = np.argsort(solution)
         top_inds = sorted_inds[-train_subset_num:]
-        train_ids = np.zeros(x.shape, dtype=bool)
+        train_ids = np.zeros(solution.shape, dtype=bool)
         train_ids[top_inds] = True
+        # Rerun calibration with chosen inds
         calibrated_params = calibrate(
             train_img_paths,
             train_ids,
@@ -91,49 +123,46 @@ def optimize_GA(
             num_grid_corners,
             square_size=square_size,
         )
-        test_err = evaluate_reprojection(
-            img_paths, test_ids, calibrated_params, cached_images
-        )
-        test_errs.append(test_err)
-        return test_err
 
-    # Run the genetic algorithm
-    res = scipy.optimize.differential_evolution(
-        compute_fitness, bounds=bounds, disp=True, maxiter=max_iter, popsize=1,
-    )
+        if vis_extrinsics:
+            rvecs = calibrated_params["rvecs"]
+            tvecs = calibrated_params["tvecs"]
 
-    solution = res.x
-    # Recompute the calibration solution since it is not directly reported
-    sorted_inds = np.argsort(solution)
-    top_inds = sorted_inds[-train_subset_num:]
-    train_ids = np.zeros(solution.shape, dtype=bool)
-    train_ids[top_inds] = True
-    # Rerun calibration with chosen inds
-    calibrated_params = calibrate(
-        train_img_paths,
-        train_ids,
-        cached_images,
-        num_grid_corners,
-        square_size=square_size,
-    )
-
-    if vis_extrinsics:
-        rvecs = calibrated_params["rvecs"]
-        tvecs = calibrated_params["tvecs"]
-
-        visualize(
-            rvecs,
-            tvecs,
-            calibrated_params["mtx"],
-            board_height=num_grid_corners[0],
-            board_width=num_grid_corners[1],
-            pattern_centric=False,
-            square_size=square_size,
-            image_shape=(1920, 1080),
-        )
+            visualize(
+                rvecs,
+                tvecs,
+                calibrated_params["mtx"],
+                board_height=num_grid_corners[0],
+                board_width=num_grid_corners[1],
+                pattern_centric=False,
+                square_size=square_size,
+                image_shape=(1920, 1080),
+            )
+    else:
+        errors_pickle = Path(kwargs["savepath"]).with_suffix(".pickle")
+        test_errs = pickle.load(open(errors_pickle, "rb"))
 
     if vis_hist:
         plt.hist(test_errs)
+        plt.show()
+
+    plt.scatter(np.arange(len(test_errs)), test_errs)
+    plt.ylabel("Objective function value")
+    plt.xlabel("Number of function evaluations")
+    plt.ylim(0, min(0.5, np.max(test_errs)))
+    # xticks = np.arange(0, NUM_TRAIN * max_iter, NUM_TRAIN)
+    # xticks = np.concatenate((xticks, [len(test_errs)]))
+    # xtick_labels = np.arange(max_iter) + 1
+    # xtick_labels = [str(x) for x in xtick_labels] + ["polishing"]
+    # plt.xticks(xticks, xtick_labels)
+    plt.title("Genetic Algorithm with L-BFGS-B polishing")
+
+    if "savepath" in kwargs and kwargs["savepath"] is not None:
+        errors_pickle = Path(kwargs["savepath"]).with_suffix(".pickle")
+        with open(errors_pickle, "wb") as outfile_h:
+            pickle.dump(test_errs, outfile_h)
+        plt.savefig(kwargs["savepath"])
+    else:
         plt.show()
 
     return calibrated_params, train_ids
