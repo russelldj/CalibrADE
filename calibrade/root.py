@@ -134,9 +134,15 @@ def optimize_GA(
         plt.hist(test_errs)
         plt.show()
 
-        plt.scatter(np.arange(len(test_errs)), test_errs)
-        plt.ylabel("Objective function value")
-        plt.xlabel("Function evaluation")
+    plt.scatter(np.arange(len(test_errs)), test_errs)
+    plt.ylabel("Objective function value")
+    plt.xlabel("Function evaluations")
+    if "savepath" in kwargs and kwargs["savepath"] is not None:
+        errors_pickle = Path(kwargs["savepath"]).with_suffix("pickle")
+        with open(errors_pickle, "wb") as outfile_h:
+            pickle.dump(test_errs, outfile_h)
+        plt.savefig(kwargs["savepath"])
+    else:
         plt.show()
 
     return calibrated_params, train_ids
@@ -194,13 +200,14 @@ def optimize_random(
         plt.hist(test_err)
         plt.xlabel("Reprojection error")
         plt.ylabel("Frequency")
-        if "savepath" in kwargs and kwargs["savepath"] is not None:
-            plt.savefig(kwargs["savepath"])
-            errors_pickle = Path(kwargs["savepath"]).with_suffix("pickle")
-            with open(errors_pickle, "wb") as outfile_h:
-                pickle.dump(test_err, outfile_h)
-        else:
-            plt.show()
+
+    if "savepath" in kwargs and kwargs["savepath"] is not None:
+        plt.savefig(kwargs["savepath"])
+        errors_pickle = Path(kwargs["savepath"]).with_suffix("pickle")
+        with open(errors_pickle, "wb") as outfile_h:
+            pickle.dump(test_err, outfile_h)
+    else:
+        plt.show()
 
     min_idx = np.argmin(test_err)
     return cam_params[min_idx], train_subset_ids_list[min_idx]
@@ -216,6 +223,7 @@ def optimize_GP(
     vis_extrinsics=False,
     num_grid_corners=(7, 9),
     square_size=SQUARE_SIZE,
+    image_shape=(1920, 1080),
     **kwargs,
 ):
     cached_images = {}
@@ -273,12 +281,9 @@ def optimize_GP(
         )
         gp.fit(detected_pts, errors)
 
-        sample_xs = np.linspace(
-            np.min(detected_pts[:, 0]) - 100, np.max(detected_pts[:, 0]) + 100, 100
-        )
-        sample_ys = np.linspace(
-            np.min(detected_pts[:, 1]) - 100, np.max(detected_pts[:, 1]) + 100, 100
-        )
+        sample_xs = np.arange(image_shape[0])
+        sample_ys = np.arange(image_shape[1])
+        pdb.set_trace()
 
         (sample_xs, sample_ys) = np.meshgrid(sample_xs, sample_ys)
         sample_xs = sample_xs.ravel()
