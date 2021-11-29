@@ -138,7 +138,7 @@ def optimize_GA(
     plt.ylabel("Objective function value")
     plt.xlabel("Function evaluations")
     if "savepath" in kwargs and kwargs["savepath"] is not None:
-        errors_pickle = Path(kwargs["savepath"]).with_suffix("pickle")
+        errors_pickle = Path(kwargs["savepath"]).with_suffix(".pickle")
         with open(errors_pickle, "wb") as outfile_h:
             pickle.dump(test_errs, outfile_h)
         plt.savefig(kwargs["savepath"])
@@ -283,19 +283,26 @@ def optimize_GP(
 
         sample_xs = np.arange(image_shape[0])
         sample_ys = np.arange(image_shape[1])
-        pdb.set_trace()
 
         (sample_xs, sample_ys) = np.meshgrid(sample_xs, sample_ys)
         sample_xs = sample_xs.ravel()
         sample_ys = sample_ys.ravel()
         sample_points = np.stack((sample_xs, sample_ys), axis=1)
         print(sample_points.shape)
+        breakpoint()
         pred_error, pred_error_sigma = gp.predict(sample_points, return_std=True)
-        cb = plt.scatter(
-            sample_points[:, 0],
-            sample_points[:, 1],
-            c=pred_error + 1.96 * pred_error_sigma,
-        )
+        print("predicted GP")
+        upper_bound = pred_error + 1.96 * pred_error_sigma
+        upper_bound = upper_bound.reshape(image_shape[::-1])
+        print(upper_bound.shape)
+        print("About to show")
+        cb = plt.imshow(upper_bound)
+        print("Showed")
+        # cb = plt.scatter(
+        #    sample_points[:, 0],
+        #    sample_points[:, 1],
+        #    c=pred_error + 1.96 * pred_error_sigma,
+        # )
         plt.colorbar(cb)
         plt.legend()
         plt.title(gp.kernel_)
