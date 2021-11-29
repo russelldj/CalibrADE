@@ -70,7 +70,9 @@ def optimize_GA(
     test_errs = []
 
     # Only use training images for training
-    train_img_paths = img_paths[global_train_ids]
+    train_ids = select_subset_num(10, global_train_ids)
+    # Downsample to 25
+    train_img_paths = img_paths[train_ids]
 
     # Constrain all decision variables to be in the range (0, 1)
     bounds = [(0, 1)] * train_img_paths.shape[0]
@@ -132,17 +134,6 @@ def optimize_GA(
 
     if vis_hist:
         plt.hist(test_errs)
-        plt.show()
-
-    plt.scatter(np.arange(len(test_errs)), test_errs)
-    plt.ylabel("Objective function value")
-    plt.xlabel("Function evaluations")
-    if "savepath" in kwargs and kwargs["savepath"] is not None:
-        errors_pickle = Path(kwargs["savepath"]).with_suffix(".pickle")
-        with open(errors_pickle, "wb") as outfile_h:
-            pickle.dump(test_errs, outfile_h)
-        plt.savefig(kwargs["savepath"])
-    else:
         plt.show()
 
     return calibrated_params, train_ids
