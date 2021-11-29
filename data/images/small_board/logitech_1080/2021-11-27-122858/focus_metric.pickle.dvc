@@ -1,0 +1,5 @@
+outs:
+- md5: 90d5eafc8fe585fcd59b9e6ef9078f19
+  size: 15149
+  path: focus_metric.pickle
+  isexec: true
