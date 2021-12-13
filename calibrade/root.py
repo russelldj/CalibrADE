@@ -8,13 +8,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 import scipy.optimize
+import cv2
 
 
 from calibrate_intrinsics import calibrate, compute_extrinsics, evaluate_reprojection
 import ipdb
 import matplotlib.pyplot as plt
 import numpy as np
-from calibrate_intrinsics import calibrate, evaluate_reprojection, project_points
+from calibrate_intrinsics import (
+    calibrate,
+    evaluate_reprojection,
+    project_points,
+    read_cached_image,
+    get_cached_corners,
+)
 from constants import SQUARE_SIZE
 from prune import prune
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -23,6 +30,7 @@ from sklearn.gaussian_process.kernels import ConstantKernel as C
 from tqdm import tqdm
 from util import read_data
 from visualize import visualize
+from dispersion import calc_l2_disp
 
 ERROR_VIS_SCALE = 5
 
@@ -70,7 +78,8 @@ def optimize_GA(
     test_errs = []
 
     NUM_TRAIN = 25
-    if False:
+    # Hack to replot if False
+    if True:
         # Only use training images for training
         train_ids = select_subset_num(NUM_TRAIN, global_train_ids)
         # Downsample to 25
@@ -259,6 +268,103 @@ def optimize_random(
     return cam_params[min_idx], train_subset_ids_list[min_idx]
 
 
+def optimize_dispersion(
+    img_paths,
+    test_ids,
+    global_train_ids,
+    max_iter,
+    train_subset_num,
+    vis_extrinsics=False,
+    num_grid_corners=(7, 9),
+    square_size=SQUARE_SIZE,
+    image_shape=(1920, 1080),
+    **kwargs,
+):
+    cached_images = {}
+    test_err = []
+    cam_params = []
+    train_subset_ids_list = []
+    # HACK, remove
+    # global_train_ids = select_subset_num(25, global_train_ids)
+
+    min_disp = np.inf
+    best_train_ids = None
+
+    for i in tqdm(range(0, max_iter), desc="Main optimization loop"):
+        train_ids = select_subset_num(train_subset_num, global_train_ids)
+        filenames = img_paths[train_ids]
+        all_corners = []
+        for fname in filenames:
+            img = read_cached_image(fname, cached_images)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # Find the chess board corners
+            ret, corners = get_cached_corners(fname, gray, num_grid_corners)
+            if ret:
+                all_corners.append(np.squeeze(corners))
+        all_corners = np.vstack(all_corners)
+        disp = calc_l2_disp(
+            pts=all_corners, bds=np.asarray(image_shape[::-1]), do_plot=False
+        )
+        if disp < min_disp:
+            min_disp = disp
+            best_train_ids = train_ids
+
+    # Need to get the image keypoints
+    params = calibrate(
+        img_paths,
+        best_train_ids,
+        cached_images,
+        num_grid_corners,
+        square_size=square_size,
+    )
+    test_err = evaluate_reprojection(img_paths, test_ids, params, cached_images)
+    if vis_extrinsics:
+        rvecs = params["rvecs"]
+        tvecs = params["tvecs"]
+
+        visualize(
+            rvecs,
+            tvecs,
+            cam_params[-1]["mtx"],
+            board_height=num_grid_corners[0],
+            board_width=num_grid_corners[1],
+            pattern_centric=False,
+            square_size=square_size,
+            image_shape=(1920, 1080),
+        )
+
+    breakpoint()
+    plt.scatter(np.arange(len(test_err)), test_err, label="Single subset")
+
+    min_reproj = np.min(test_err)
+    plt.hlines(
+        min_reproj,
+        xmin=0,
+        xmax=300,
+        label="Minimum value",
+        linestyles="dashed",
+        colors=["r"],
+    )
+    plt.xlabel("Randomly-selected subsets")
+    plt.ylabel("Mean reprojection error (pixels)")
+    plt.ylim(0, 3)
+    plt.title("Random subset selection")
+    plt.legend()
+
+    if "savepath" in kwargs and kwargs["savepath"] is not None:
+        plt.savefig(kwargs["savepath"])
+        errors_pickle = Path(kwargs["savepath"]).with_suffix(".pickle")
+        with open(errors_pickle, "wb") as outfile_h:
+            pickle.dump(test_err, outfile_h)
+    else:
+        plt.show()
+
+    min_idx = np.argmin(test_err)
+    print(min(test_err))
+    return cam_params[min_idx], train_subset_ids_list[min_idx]
+
+
 def optimize_GP(
     img_paths,
     test_ids,
@@ -393,7 +499,12 @@ def optimize_GP(
     return cam_params[min_idx], train_subset_ids_list[min_idx]
 
 
-OPTIMIZATION_TYPES = {"GA": optimize_GA, "GP": optimize_GP, "random": optimize_random}
+OPTIMIZATION_TYPES = {
+    "GA": optimize_GA,
+    "GP": optimize_GP,
+    "random": optimize_random,
+    "dispersion": optimize_dispersion,
+}
 
 
 def root(args):

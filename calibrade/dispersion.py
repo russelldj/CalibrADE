@@ -5,8 +5,13 @@ import pickle
 import pathlib
 import imageio as io
 
-temp = pathlib.PosixPath
-pathlib.PosixPath = pathlib.WindowsPath
+try:
+    # temp = pathlib.PosixPath
+    # pathlib.PosixPath = pathlib.WindowsPath
+    pass
+except NotImplementedError:
+    # You must be on Unix
+    pass
 
 # np.random.seed(1000)
 # N = 20 #num of points
@@ -57,7 +62,11 @@ pathlib.PosixPath = pathlib.WindowsPath
 # plt.show()
 
 
-def calc_l2_disp(pickle_file="", pts=[], bds=[], do_plot=True):
+def calc_l2_disp(pickle_file="", pts=np.asarray([]), bds=np.asarray([]), do_plot=True):
+    """
+    bds : np.ndarray
+        Size of the image (H, W)
+    """
 
     if pickle_file != "":  # pts read from pickle file
         with open(pickle_file, "rb") as handle:
